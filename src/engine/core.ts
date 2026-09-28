@@ -64,24 +64,35 @@ export function killEnemy(state: GameState, e: Enemy): void {
   state.enemies = state.enemies.filter((x) => x.id !== e.id);
   log(state, 'system', `${enemyName(e)} is defeated at ${coordLabel(e.pos)}. Remove its token.`, true);
 
+  const notice = (discard: string[], extras: string[] = []) =>
+    state.pendingLoot.push({ enemyId: e.id, enemyKind: e.kind, enemyName: enemyName(e), discard, extras });
+
   switch (e.kind) {
     case 'rat':
     case 'archer':
     case 'brute':
-    case 'leech':
-      log(state, 'system', `Loot: add the ${ENEMY_DEFS[e.kind].drop} (loot card) to your discard pile.`, true);
+    case 'leech': {
+      const card = ENEMY_DEFS[e.kind].drop!;
+      log(state, 'system', `Loot: add the ${card} (loot card) to your discard pile.`, true);
+      notice([card]);
       break;
-    case 'warden':
+    }
+    case 'warden': {
       state.player.potions += 1;
       log(state, 'system', 'Loot: the Warden drops the Heal Potion. Take the potion card.', true);
+      const extras = ['Take the Heal Potion card. Keep it with you, not in the deck: drinking it costs 1 action.'];
       if (state.room.exit?.locked) {
         state.room.exit.locked = false;
         log(state, 'system', 'The exit is now unlocked.');
+        extras.push('The exit is now unlocked.');
       }
+      notice([], extras);
       break;
+    }
     case 'scrap':
       if (e.stolen) {
         log(state, 'system', `The scrap drops ${e.stolen} stolen fragment(s): put them in your discard pile.`, true);
+        notice([`${e.stolen === 1 ? 'The fragment' : `The ${e.stolen} fragments`} it stole`]);
       }
       break;
     case 'redactor':
@@ -94,6 +105,11 @@ export function killEnemy(state: GameState, e: Enemy): void {
       }
       break;
   }
+}
+
+/** The players confirmed they took the loot on the table: clear the popup queue. */
+export function acknowledgeLoot(state: GameState): GameState {
+  return { ...state, pendingLoot: [] };
 }
 
 /** Burn tick that happens right before a unit takes an action. Returns true if the unit died from it. */

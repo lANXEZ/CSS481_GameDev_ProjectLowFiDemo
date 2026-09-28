@@ -85,6 +85,17 @@ export interface LogEntry {
   paper?: boolean;
 }
 
+/** A defeated enemy whose loot the players still need to take on the table. */
+export interface LootNotice {
+  enemyId: string;
+  enemyKind: EnemyKind;
+  enemyName: string;
+  /** Cards that go into the discard pile, e.g. "Fire fragment". */
+  discard: string[];
+  /** Other things to do or know, e.g. taking the Heal Potion or the exit unlocking. */
+  extras: string[];
+}
+
 export interface GameState {
   roomIndex: number;
   room: RoomRuntime;
@@ -105,6 +116,8 @@ export interface GameState {
   rng: number;
   log: LogEntry[];
   nextLogId: number;
+  /** Loot from kills not yet confirmed at the table (drives the loot popup). */
+  pendingLoot: LootNotice[];
 }
 
 export interface SpellSpec {

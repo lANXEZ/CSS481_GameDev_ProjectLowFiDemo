@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  acknowledgeLoot,
+  gmRemoveEnemy,
   actionsNextTurn,
   wardenChargedNextTurn,
   advanceRoom,
@@ -326,6 +328,47 @@ describe('boss room', () => {
     const after = runEnemyTurn(s);
     expect(after.enemies[0].stolen).toBe(1);
     expect(after.enemies[0].pos.y).toBeGreaterThan(1);
+  });
+});
+
+describe('loot popup', () => {
+  it('records the drop when a spell kills an enemy, and clears on acknowledge', () => {
+    const s = board({ player: 'a1', enemies: [{ kind: 'rat', at: 'a2' }, { kind: 'archer', at: 'b1' }] });
+    s.enemies.forEach((e) => (e.hp = 1));
+    s.player.mana = 6;
+    const after = playerCast(s, spec('rock', 1, 'cross', 1), null);
+    expect(after.pendingLoot.map((l) => [l.enemyId, l.discard])).toEqual([
+      ['1a', ['Fire fragment']],
+      ['2a', ['Beam fragment']],
+    ]);
+    expect(acknowledgeLoot(after).pendingLoot).toEqual([]);
+  });
+
+  it('warden loot mentions the potion and the unlocked exit; wards drop nothing', () => {
+    let s = board({ player: 'a1', enemies: [{ kind: 'warden', at: 'c3' }, { kind: 'ward', at: 'e5', element: 'rock' }], exit: { at: 'f6', locked: true } });
+    s = gmRemoveEnemy(s, '5a', true);
+    expect(s.pendingLoot).toHaveLength(1);
+    expect(s.pendingLoot[0].extras.join(' ')).toMatch(/Heal Potion.*unlocked/);
+    s = gmRemoveEnemy(acknowledgeLoot(s), '6a', true);
+    expect(s.pendingLoot).toEqual([]);
+  });
+
+  it('a burn kill during the enemy turn shows up after the turn', () => {
+    const s = board({ player: 'a1', enemies: [{ kind: 'rat', at: 'd4' }] });
+    s.enemies[0].hp = 1;
+    s.enemies[0].status.burn = 2;
+    const after = runEnemyTurn(s);
+    expect(after.enemies).toHaveLength(0);
+    expect(after.pendingLoot[0].discard).toEqual(['Fire fragment']);
+  });
+
+  it('a scrap returns what it stole; removing without loot shows nothing', () => {
+    let s = board({ size: 8, player: 'a1', enemies: [{ kind: 'scrap', at: 'h8' }, { kind: 'rat', at: 'h1' }] });
+    s.enemies[0].stolen = 2;
+    s = gmRemoveEnemy(s, '7a', true);
+    expect(s.pendingLoot[0].discard).toEqual(['The 2 fragments it stole']);
+    s = gmRemoveEnemy(acknowledgeLoot(s), '1a', false);
+    expect(s.pendingLoot).toEqual([]);
   });
 });
 

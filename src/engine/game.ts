@@ -50,6 +50,7 @@ export function createGame(seed: number = Date.now()): GameState {
     rng: seed | 0,
     log: [],
     nextLogId: 1,
+    pendingLoot: [],
   };
   log(state, 'system', 'New game. Shuffle the 11 fragment cards into a deck and draw a hand of 5.', true);
   loadRoom(state, 0);

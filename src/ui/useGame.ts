@@ -11,12 +11,17 @@ interface History {
   future: GameState[];
 }
 
+/** Fill in fields added after a game was saved, so older saves keep working. */
+function upgrade(s: GameState): GameState {
+  return { ...s, pendingLoot: s.pendingLoot ?? [] };
+}
+
 function load(): History {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const saved = JSON.parse(raw) as History;
-      if (saved?.present?.room) return { past: saved.past ?? [], present: saved.present, future: [] };
+      if (saved?.present?.room) return { past: (saved.past ?? []).map(upgrade), present: upgrade(saved.present), future: [] };
     }
   } catch {
     // Storage blocked or corrupt: start fresh.
@@ -33,6 +38,8 @@ export interface GameApi {
   canRedo: boolean;
   /** Apply an engine function. Rule errors are shown instead of thrown. */
   run: (fn: (s: GameState) => GameState) => boolean;
+  /** Change the current state without adding an undo step (for bookkeeping like dismissing popups). */
+  amend: (fn: (s: GameState) => GameState) => void;
   undo: () => void;
   redo: () => void;
   reset: () => void;
@@ -69,6 +76,10 @@ export function useGame(): GameApi {
     [history],
   );
 
+  const amend = useCallback((fn: (s: GameState) => GameState) => {
+    setHistory((h) => ({ ...h, present: fn(h.present) }));
+  }, []);
+
   const undo = useCallback(() => {
     setHistory((h) => (h.past.length ? { past: h.past.slice(0, -1), present: h.past[h.past.length - 1], future: [h.present, ...h.future] } : h));
     setError(null);
@@ -91,6 +102,7 @@ export function useGame(): GameApi {
     canUndo: history.past.length > 0,
     canRedo: history.future.length > 0,
     run,
+    amend,
     undo,
     redo,
     reset,

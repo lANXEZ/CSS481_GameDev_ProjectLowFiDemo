@@ -1338,3 +1338,114 @@ select {
   color: #8a7657;
   font-size: 0.8rem;
 }
+
+/* ---------------------------------------------------------------- loot popup */
+
+.loot-modal {
+  width: min(520px, 100%);
+}
+
+.loot-list,
+.loot-extras {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.loot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+.loot-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.loot-from {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.loot-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* Miniature of the kit's fragment cards: coloured band on a cream card. */
+.loot-card {
+  --card: #777;
+  width: 132px;
+  border: 2.5px solid var(--card);
+  border-radius: 10px;
+  background: var(--vellum);
+  overflow: hidden;
+  animation: loot-in 260ms ease-out both;
+}
+
+.loot-card-band {
+  background: var(--card);
+  color: #fff;
+  text-align: center;
+  padding: 6px 6px 7px;
+  display: flex;
+  flex-direction: column;
+}
+
+.loot-card-cat {
+  font-size: 0.68rem;
+  opacity: 0.9;
+}
+
+.loot-card-title {
+  font-family: var(--serif);
+  font-weight: 800;
+  font-size: 1.2rem;
+  line-height: 1.1;
+}
+
+.loot-card-note {
+  color: #3a2c1a;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-align: center;
+  padding: 10px 6px;
+}
+
+.loot-extras li {
+  color: var(--muted);
+  font-size: 0.9rem;
+  padding-left: 14px;
+  position: relative;
+}
+
+.loot-extras li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0.6em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--gilt);
+}
+
+@keyframes loot-in {
+  from {
+    transform: translateY(8px) scale(0.96);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loot-card {
+    animation: none;
+  }
+}

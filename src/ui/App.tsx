@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ENEMY_DEFS,
   ROOMS,
+  acknowledgeLoot,
   advanceRoom,
   canPlaceAt,
   endPlayerTurn,
@@ -29,6 +30,7 @@ import { Board, type BoardHighlights } from './Board';
 import { EnemyTurnPanel } from './EnemyTurnPanel';
 import { Inspector, type PlaceMode } from './Inspector';
 import { LogPanel } from './LogPanel';
+import { LootDialog } from './LootDialog';
 import { TurnTracker, WizardCard } from './Panels';
 import { SpinWheel } from './SpinWheel';
 import { useGame } from './useGame';
@@ -117,7 +119,7 @@ export function App() {
       } else if (e.key === 'Escape') {
         setPlaceMode(null);
         setSelectedId(null);
-      } else if (KEY_DIRS[e.key] && state.phase === 'player' && !wheelOpen) {
+      } else if (KEY_DIRS[e.key] && state.phase === 'player' && !document.querySelector('.modal-backdrop')) {
         const d = KEY_DIRS[e.key];
         if (moveTarget(state, d)) {
           e.preventDefault();
@@ -253,6 +255,9 @@ export function App() {
         />
       )}
 
+      {state.pendingLoot.length > 0 && state.phase !== 'won' && state.phase !== 'lost' && (
+        <LootDialog notices={state.pendingLoot} onConfirm={() => game.amend(acknowledgeLoot)} />
+      )}
       {state.phase === 'roomExit' && <RoomExitDialog state={state} onAdvance={() => run(advanceRoom)} onUndo={game.undo} />}
       {(state.phase === 'won' || state.phase === 'lost') && (
         <EndDialog won={state.phase === 'won'} onUndo={game.undo} onNew={() => game.reset()} />

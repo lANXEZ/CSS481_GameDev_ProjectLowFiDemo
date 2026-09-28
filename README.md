@@ -25,9 +25,13 @@ The current game is saved in the browser, so a refresh doesn't lose the playtest
    a time; the board shows each step, and you copy it onto the paper board. *Finish enemy turn* applies it.
 3. **Do on the table.** Anything the players must do with paper components (discard fragments, take loot, place a
    Page Scrap token, shred a card) is shown in the gold *Do on the table* box and tagged *Table* in the log.
-4. **Fixing mismatches.** Click any token to edit its HP, statuses or position, defeat it or remove it. With nothing
+4. **Loot.** When an enemy dies (from a spell, from Burn on its own turn, or through *Defeat* in the GM panel), a popup
+   shows which loot cards to add to your discard pile, the Heal Potion and exit unlock for the Warden, or the fragments
+   a Page Scrap stole. Confirm it once they're on the table. Undo goes back to before the kill.
+5. **Hover a token** to see what it is, how it behaves and what it's about to do.
+6. **Fixing mismatches.** Click any token to edit its HP, statuses or position, defeat it or remove it. With nothing
    selected, *Table fixes* lets you place extra units or lock/unlock the exit. Every fix is logged as a GM entry.
-5. **Undo / redo** with the buttons or Ctrl+Z / Ctrl+Y. **Export playtest log** downloads the full log as JSON.
+7. **Undo / redo** with the buttons or Ctrl+Z / Ctrl+Y. **Export playtest log** downloads the full log as JSON.
 
 ## Rules as implemented
 
