@@ -50,6 +50,8 @@ export interface EnemyDef {
   damage: number;
   attackText: string;
   notes: string;
+  /** What the enemy AI actually does on its turn, in plain words. */
+  behavior: string;
   drop: string | null;
 }
 
@@ -64,6 +66,7 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
     damage: 1,
     attackText: '1 dmg to one adjacent tile.',
     notes: 'Moves in packs. Punishes single-target spells.',
+    behavior: 'Takes the shortest path to you, then bites once when next to you. Stops for the turn after biting.',
     drop: 'Fire fragment',
   },
   archer: {
@@ -76,6 +79,8 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
     damage: 2,
     attackText: '2 dmg, range 4, straight or diagonal line. Blocked by pillars.',
     notes: 'If you are adjacent when its turn starts, it spends both actions backing off away from you.',
+    behavior:
+      'Walks until it has a clear straight or diagonal shot within 4 tiles, then shoots once. If you start its turn next to it, it spends both actions backing away from you instead.',
     drop: 'Beam fragment',
   },
   brute: {
@@ -88,6 +93,7 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
     damage: 3,
     attackText: '3 dmg to one adjacent tile.',
     notes: 'Slow but tough. A tempo check, not a puzzle.',
+    behavior: 'Takes the shortest path to you, then hits once when next to you. Stops for the turn after hitting.',
     drop: 'Rock fragment',
   },
   leech: {
@@ -100,6 +106,7 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
     damage: 1,
     attackText: 'Drains 1 mana (not HP) from one adjacent tile.',
     notes: 'Pressures your meditation, not your HP.',
+    behavior: 'Takes the shortest path to you, then drains 1 mana once when next to you. Never touches your HP.',
     drop: 'Water fragment',
   },
   warden: {
@@ -110,9 +117,10 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
     actions: 2,
     attack: 'telegraph',
     damage: RULES.wardenShotDamage,
-    attackText:
-      'No normal attack. On its 2nd, 4th, 6th… turn it holds a charge: if you are in its line of sight it marks a line to the board edge; its next action fires 5 dmg down that line.',
+    attackText: 'No normal attack. A telegraphed 5 dmg line on charged turns.',
     notes: 'Crowned: holds the room key. Otherwise runs away from you.',
+    behavior:
+      'Runs away from you. On its 2nd, 4th, 6th… turn, if you are on one of its 8 lines of sight, it marks a line to the board edge and fires 5 dmg down it on its very next action. An unused charge is lost at the end of that turn.',
     drop: 'Heal potion (+ unlocks the exit)',
   },
   ward: {
@@ -125,6 +133,7 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
     damage: 0,
     attackText: 'None. Does not attack.',
     notes: 'Immune to spells without its attuned element. Spawns 1 Page Scrap at the end of every enemy turn.',
+    behavior: 'Never moves or attacks. At the end of every enemy turn it spawns a Page Scrap on a free tile next to it. While any Ward stands, the Redactor is immune.',
     drop: null,
   },
   scrap: {
@@ -137,6 +146,7 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
     damage: 0,
     attackText: 'Touch (1 action): steals a fragment from your hand.',
     notes: 'Flees with its remaining actions once it holds a fragment.',
+    behavior: 'Runs to you and steals a fragment with a touch, then spends every action from then on fleeing. Kill it to get the fragment back.',
     drop: 'The fragment it stole',
   },
   redactor: {
@@ -147,10 +157,11 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
     actions: RULES.redactorActions.guarded,
     attack: 'explode',
     damage: RULES.redactorExplodeDamage,
-    attackText:
-      'Explodes for 3 dmg on all 8 tiles around it whenever you are in that zone (every action). Exploded tiles become redaction zone for one turn.',
+    attackText: 'Explodes for 3 dmg on all 8 tiles around it, once per action.',
     notes:
       'Immune while any Page Ward stands. While Wards stand: shreds 1 fragment and gains 1 mark each turn (2 actions). After all Wards fall: spends 1 mark per turn for Redacting mode (5 actions); when out of marks, 3 actions.',
+    behavior:
+      'Walks toward you and explodes on every action while you are in the 8 tiles around it. Exploded tiles become redaction zone: end your next turn there and you lose a fragment for good.',
     drop: null,
   },
 };

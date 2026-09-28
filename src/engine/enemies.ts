@@ -131,11 +131,24 @@ function runUnitTurn(s: GameState, e: Enemy, emit: (actorId: string | null, focu
   emit(e.id);
 }
 
+/** Actions the unit will get on its next turn. Pure: mirrors startUnitTurn without spending marks. */
+export function actionsNextTurn(s: GameState, e: Enemy): number {
+  if (e.kind !== 'redactor') return ENEMY_DEFS[e.kind].actions;
+  if (wardsStanding(s)) return RULES.redactorActions.guarded;
+  return (e.marks ?? 0) > 0 ? RULES.redactorActions.redacting : RULES.redactorActions.spent;
+}
+
+/** Whether the Warden's next turn is a charged (telegraph) turn. */
+export function wardenChargedNextTurn(e: Enemy): boolean {
+  return ((e.turnCount ?? 0) + 1) % RULES.wardenChargeEvery === 0;
+}
+
 /** Start-of-turn bookkeeping. Returns the number of actions the unit gets this turn. */
 function startUnitTurn(s: GameState, e: Enemy): number {
   if (e.kind === 'warden') {
+    const charged = wardenChargedNextTurn(e);
     e.turnCount = (e.turnCount ?? 0) + 1;
-    if (e.turnCount % RULES.wardenChargeEvery === 0) {
+    if (charged) {
       e.charge = true;
       log(s, 'enemy', `${enemyName(e)} gains a telegraph charge (its turn ${e.turnCount}).`);
     }

@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState, type FocusEvent, type KeyboardEvent, type MouseEvent } from 'react';
 import { coordLabel, posKey, wardsStanding, type Enemy, type GameState, type Pos } from '../engine';
 import { ELEMENT_COLOR, PLAYER_COLOR, hpColor, tokenColor, unitTitle } from './look';
+import { UnitTooltip } from './UnitTooltip';
 
 const T = 80; // tile size in SVG units
 const M = 26; // margin for coordinate labels
@@ -52,107 +53,129 @@ export function Board({ state, highlights, selectedId, onTileClick, onUnitClick 
 
   const shielded = wardsStanding(state);
 
+  // Hover card for the unit under the pointer (or keyboard focus).
+  const [peek, setPeek] = useState<{ id: string; anchor: DOMRect } | null>(null);
+  useEffect(() => {
+    if (!peek) return;
+    const clear = () => setPeek(null);
+    window.addEventListener('scroll', clear, true);
+    window.addEventListener('resize', clear);
+    return () => {
+      window.removeEventListener('scroll', clear, true);
+      window.removeEventListener('resize', clear);
+    };
+  }, [peek]);
+
+  const handlers = (id: string): UnitHandlers => ({
+    onClick: () => onUnitClick(id),
+    onPeek: (el) => setPeek({ id, anchor: el.getBoundingClientRect() }),
+    onUnpeek: () => setPeek((cur) => (cur?.id === id ? null : cur)),
+  });
+
   return (
-    <svg
-      className="board"
-      viewBox={`0 0 ${vbW} ${vbH}`}
-      preserveAspectRatio="xMinYMin meet"
-      role="grid"
-      aria-label={`${state.room.name} board, ${W} by ${H}`}
-    >
-      <defs>
-        <pattern id="hatch-red" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-          <rect width="10" height="10" fill="rgba(178,40,40,0.18)" />
-          <line x1="0" y1="0" x2="0" y2="10" stroke="rgba(178,40,40,0.75)" strokeWidth="4" />
-        </pattern>
-        <filter id="token-shadow" x="-30%" y="-30%" width="160%" height="160%">
-          <feDropShadow dx="0" dy="1.5" stdDeviation="1.2" floodColor="#2a1c10" floodOpacity="0.45" />
-        </filter>
-      </defs>
+    <>
+      <svg
+        className="board"
+        viewBox={`0 0 ${vbW} ${vbH}`}
+        preserveAspectRatio="xMinYMin meet"
+        role="grid"
+        aria-label={`${state.room.name} board, ${W} by ${H}`}
+      >
+        <defs>
+          <pattern id="hatch-red" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <rect width="10" height="10" fill="rgba(178,40,40,0.18)" />
+            <line x1="0" y1="0" x2="0" y2="10" stroke="rgba(178,40,40,0.75)" strokeWidth="4" />
+          </pattern>
+          <filter id="token-shadow" x="-30%" y="-30%" width="160%" height="160%">
+            <feDropShadow dx="0" dy="1.5" stdDeviation="1.2" floodColor="#2a1c10" floodOpacity="0.45" />
+          </filter>
+        </defs>
 
-      {/* vellum page */}
-      <rect x={M - 4} y={-1} width={W * T + 8} height={H * T + 8} rx={6} className="board-page" />
+        {/* vellum page */}
+        <rect x={M - 4} y={-1} width={W * T + 8} height={H * T + 8} rx={6} className="board-page" />
 
-      {tiles.map((p) => {
-        const k = posKey(p);
-        const x = tx(p);
-        const y = ty(p);
-        const clickable = sets.moves.has(k) || sets.place.has(k);
-        return (
-          <g
-            key={k}
-            className={`tile${clickable ? ' tile-clickable' : ''}`}
-            onClick={() => onTileClick(p)}
-            role="gridcell"
-            aria-label={coordLabel(p)}
-          >
-            <rect x={x} y={y} width={T} height={T} className={(p.x + p.y) % 2 ? 'tile-a' : 'tile-b'} />
-            {sets.marked.has(k) && <rect x={x} y={y} width={T} height={T} fill="url(#hatch-red)" />}
-            {sets.zone.has(k) && <Redacted x={x} y={y} occupied={sets.occupied.has(k)} />}
-            {sets.spell.has(k) && <rect x={x + 2} y={y + 2} width={T - 4} height={T - 4} rx={4} className="hl-spell" />}
-            {sets.focus.has(k) && <rect x={x + 3} y={y + 3} width={T - 6} height={T - 6} rx={5} className="hl-focus" />}
-            {sets.moves.has(k) && <circle cx={x + T / 2} cy={y + T / 2} r={9} className="hl-move" />}
-            {sets.place.has(k) && <rect x={x + 6} y={y + 6} width={T - 12} height={T - 12} rx={6} className="hl-place" />}
-          </g>
-        );
-      })}
+        {tiles.map((p) => {
+          const k = posKey(p);
+          const x = tx(p);
+          const y = ty(p);
+          const clickable = sets.moves.has(k) || sets.place.has(k);
+          return (
+            <g
+              key={k}
+              className={`tile${clickable ? ' tile-clickable' : ''}`}
+              onClick={() => onTileClick(p)}
+              role="gridcell"
+              aria-label={coordLabel(p)}
+            >
+              <rect x={x} y={y} width={T} height={T} className={(p.x + p.y) % 2 ? 'tile-a' : 'tile-b'} />
+              {sets.marked.has(k) && <rect x={x} y={y} width={T} height={T} fill="url(#hatch-red)" />}
+              {sets.zone.has(k) && <Redacted x={x} y={y} occupied={sets.occupied.has(k)} />}
+              {sets.spell.has(k) && <rect x={x + 2} y={y + 2} width={T - 4} height={T - 4} rx={4} className="hl-spell" />}
+              {sets.focus.has(k) && <rect x={x + 3} y={y + 3} width={T - 6} height={T - 6} rx={5} className="hl-focus" />}
+              {sets.moves.has(k) && <circle cx={x + T / 2} cy={y + T / 2} r={9} className="hl-move" />}
+              {sets.place.has(k) && <rect x={x + 6} y={y + 6} width={T - 12} height={T - 12} rx={6} className="hl-place" />}
+            </g>
+          );
+        })}
 
-      {/* coordinate labels, matching the paper boards */}
-      {Array.from({ length: W }, (_, x) => (
-        <text key={`cx${x}`} x={M + x * T + T / 2} y={H * T + M - 6} className="coord">
-          {String.fromCharCode(97 + x)}
-        </text>
-      ))}
-      {Array.from({ length: H }, (_, y) => (
-        <text key={`cy${y}`} x={M / 2 - 2} y={(H - 1 - y) * T + T / 2 + 8} className="coord">
-          {y + 1}
-        </text>
-      ))}
-
-      {state.room.pillars.map((p) => (
-        <g key={`pil${posKey(p)}`} pointerEvents="none">
-          <rect x={tx(p) + 14} y={ty(p) + 14} width={T - 28} height={T - 28} rx={6} className="pillar" />
-          <rect x={tx(p) + 14} y={ty(p) + 14} width={T - 28} height={7} rx={3} className="pillar-cap" />
-          <text x={tx(p) + T / 2} y={ty(p) + T / 2 + 6} className="pillar-label">PIL</text>
-        </g>
-      ))}
-
-      {state.room.exit && (
-        <g pointerEvents="none">
-          <rect
-            x={tx(state.room.exit.pos) + 7}
-            y={ty(state.room.exit.pos) + 7}
-            width={T - 14}
-            height={T - 14}
-            rx={3}
-            className={state.room.exit.locked ? 'exit exit-locked' : 'exit'}
-          />
-          <text x={tx(state.room.exit.pos) + T / 2} y={ty(state.room.exit.pos) + T / 2 + (state.room.exit.locked ? 0 : 5)} className="exit-label">
-            EXIT
+        {/* coordinate labels, matching the paper boards */}
+        {Array.from({ length: W }, (_, x) => (
+          <text key={`cx${x}`} x={M + x * T + T / 2} y={H * T + M - 6} className="coord">
+            {String.fromCharCode(97 + x)}
           </text>
-          {state.room.exit.locked && (
-            <text x={tx(state.room.exit.pos) + T / 2} y={ty(state.room.exit.pos) + T / 2 + 15} className="exit-sub">
-              locked
+        ))}
+        {Array.from({ length: H }, (_, y) => (
+          <text key={`cy${y}`} x={M / 2 - 2} y={(H - 1 - y) * T + T / 2 + 8} className="coord">
+            {y + 1}
+          </text>
+        ))}
+
+        {state.room.pillars.map((p) => (
+          <g key={`pil${posKey(p)}`} pointerEvents="none">
+            <rect x={tx(p) + 14} y={ty(p) + 14} width={T - 28} height={T - 28} rx={6} className="pillar" />
+            <rect x={tx(p) + 14} y={ty(p) + 14} width={T - 28} height={7} rx={3} className="pillar-cap" />
+            <text x={tx(p) + T / 2} y={ty(p) + T / 2 + 6} className="pillar-label">PIL</text>
+          </g>
+        ))}
+
+        {state.room.exit && (
+          <g pointerEvents="none">
+            <rect
+              x={tx(state.room.exit.pos) + 7}
+              y={ty(state.room.exit.pos) + 7}
+              width={T - 14}
+              height={T - 14}
+              rx={3}
+              className={state.room.exit.locked ? 'exit exit-locked' : 'exit'}
+            />
+            <text x={tx(state.room.exit.pos) + T / 2} y={ty(state.room.exit.pos) + T / 2 + (state.room.exit.locked ? 0 : 5)} className="exit-label">
+              EXIT
             </text>
-          )}
-        </g>
-      )}
+            {state.room.exit.locked && (
+              <text x={tx(state.room.exit.pos) + T / 2} y={ty(state.room.exit.pos) + T / 2 + 15} className="exit-sub">
+                locked
+              </text>
+            )}
+          </g>
+        )}
 
-      {state.enemies.map((e) => (
-        <EnemyToken
-          key={e.id}
-          e={e}
-          x={tx(e.pos)}
-          y={ty(e.pos)}
-          selected={selectedId === e.id}
-          acting={highlights.actorId === e.id}
-          shielded={e.kind === 'redactor' && shielded}
-          onClick={() => onUnitClick(e.id)}
-        />
-      ))}
+        {state.enemies.map((e) => (
+          <EnemyToken
+            key={e.id}
+            e={e}
+            x={tx(e.pos)}
+            y={ty(e.pos)}
+            selected={selectedId === e.id}
+            acting={highlights.actorId === e.id}
+            shielded={e.kind === 'redactor' && shielded}
+            {...handlers(e.id)}
+          />
+        ))}
 
-      <PlayerToken state={state} x={tx(state.player.pos)} y={ty(state.player.pos)} selected={selectedId === 'player'} onClick={() => onUnitClick('player')} />
-    </svg>
+        <PlayerToken state={state} x={tx(state.player.pos)} y={ty(state.player.pos)} selected={selectedId === 'player'} {...handlers('player')} />
+      </svg>
+      {peek && <UnitTooltip state={state} unitId={peek.id} anchor={peek.anchor} />}
+    </>
   );
 }
 
@@ -203,7 +226,6 @@ function Badges({ x, y, badges }: { x: number; y: number; badges: Badge[] }) {
     <g pointerEvents="none">
       {badges.map((b, i) => (
         <g key={b.title} transform={`translate(${x + T - 13 - i * 21}, ${y + 11})`}>
-          <title>{b.title}</title>
           <rect x={-10} y={-8} width={20} height={16} rx={8} fill={b.color} stroke="#f7efdc" strokeWidth={1.5} />
           <text className="badge-text" y={4}>
             {b.label}
@@ -222,17 +244,45 @@ function statusBadges(st: { burn: number; root: number; stun: number }): Badge[]
   return out;
 }
 
-interface EnemyTokenProps {
+interface UnitHandlers {
+  onClick: () => void;
+  /** Show the hover card next to this token. */
+  onPeek: (el: Element) => void;
+  onUnpeek: () => void;
+}
+
+const canHover = () => typeof window !== 'undefined' && !!window.matchMedia?.('(hover: hover)').matches;
+
+/** Shared pointer / keyboard wiring for a token: click to select, hover or focus to show the card. */
+function unitProps({ onClick, onPeek, onUnpeek }: UnitHandlers) {
+  return {
+    className: 'unit',
+    role: 'button',
+    tabIndex: 0,
+    onClick,
+    onKeyDown: (ev: KeyboardEvent) => {
+      if (ev.key === 'Enter' || ev.key === ' ') {
+        ev.preventDefault();
+        onClick();
+      }
+    },
+    onMouseEnter: (ev: MouseEvent) => canHover() && onPeek(ev.currentTarget),
+    onMouseLeave: onUnpeek,
+    onFocus: (ev: FocusEvent) => onPeek(ev.currentTarget),
+    onBlur: onUnpeek,
+  };
+}
+
+interface EnemyTokenProps extends UnitHandlers {
   e: Enemy;
   x: number;
   y: number;
   selected: boolean;
   acting: boolean;
   shielded: boolean;
-  onClick: () => void;
 }
 
-function EnemyToken({ e, x, y, selected, acting, shielded, onClick }: EnemyTokenProps) {
+function EnemyToken({ e, x, y, selected, acting, shielded, ...handlers }: EnemyTokenProps) {
   const cx = x + T / 2;
   const cy = y + 31;
   const badges = statusBadges(e.status);
@@ -243,8 +293,7 @@ function EnemyToken({ e, x, y, selected, acting, shielded, onClick }: EnemyToken
   const r = isBoss ? 25 : 22;
 
   return (
-    <g className="unit" onClick={onClick} role="button" aria-label={`${unitTitle(e)} ${e.id}, ${e.hp} of ${e.maxHp} HP`}>
-      <title>{`${unitTitle(e)} ${e.id}: ${e.hp}/${e.maxHp} HP`}</title>
+    <g {...unitProps(handlers)} aria-label={`${unitTitle(e)} ${e.id}, ${e.hp} of ${e.maxHp} HP`}>
       {(selected || acting) && <circle cx={cx} cy={cy} r={r + 5} className={acting ? 'ring-acting' : 'ring-selected'} />}
       {shielded && <circle cx={cx} cy={cy} r={r + 3} className="ring-shield" />}
       {e.kind === 'redactor' && e.mode === 'redacting' && <circle cx={cx} cy={cy} r={r + 3} className="ring-redacting" />}
@@ -270,13 +319,12 @@ function EnemyToken({ e, x, y, selected, acting, shielded, onClick }: EnemyToken
   );
 }
 
-function PlayerToken({ state, x, y, selected, onClick }: { state: GameState; x: number; y: number; selected: boolean; onClick: () => void }) {
+function PlayerToken({ state, x, y, selected, ...handlers }: { state: GameState; x: number; y: number; selected: boolean } & UnitHandlers) {
   const p = state.player;
   const cx = x + T / 2;
   const cy = y + 31;
   return (
-    <g className="unit" onClick={onClick} role="button" aria-label={`You, ${p.hp} of ${p.maxHp} HP`}>
-      <title>{`You: ${p.hp}/${p.maxHp} HP, ${p.mana} mana`}</title>
+    <g {...unitProps(handlers)} aria-label={`You, ${p.hp} of ${p.maxHp} HP`}>
       {selected && <circle cx={cx} cy={cy} r={27} className="ring-selected" />}
       <circle cx={cx} cy={cy} r={22} fill={PLAYER_COLOR} filter="url(#token-shadow)" className="token" />
       <text x={cx} y={cy + 5} className="token-you">

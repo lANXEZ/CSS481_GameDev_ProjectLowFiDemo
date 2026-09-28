@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  actionsNextTurn,
+  wardenChargedNextTurn,
   advanceRoom,
   createGame,
   endPlayerTurn,
@@ -324,6 +326,28 @@ describe('boss room', () => {
     const after = runEnemyTurn(s);
     expect(after.enemies[0].stolen).toBe(1);
     expect(after.enemies[0].pos.y).toBeGreaterThan(1);
+  });
+});
+
+describe('turn previews (used by the hover card)', () => {
+  it('redactor next-turn actions follow wards and marks', () => {
+    const s = board({ size: 8, player: 'a1', enemies: [{ kind: 'ward', at: 'h8', element: 'fire' }, { kind: 'redactor', at: 'e5' }] });
+    const boss = () => s.enemies.find((e) => e.kind === 'redactor')!;
+    expect(actionsNextTurn(s, boss())).toBe(2);
+    s.enemies = s.enemies.filter((e) => e.kind !== 'ward');
+    boss().marks = 1;
+    expect(actionsNextTurn(s, boss())).toBe(5);
+    boss().marks = 0;
+    expect(actionsNextTurn(s, boss())).toBe(3);
+  });
+
+  it('warden charge preview matches the turn it actually charges', () => {
+    let s = board({ player: 'a1', pillars: ['b2'], enemies: [{ kind: 'warden', at: 'e3' }] });
+    expect(wardenChargedNextTurn(s.enemies[0])).toBe(false);
+    s = runEnemyTurn(s);
+    expect(wardenChargedNextTurn(s.enemies[0])).toBe(true);
+    const plan = planEnemyTurn(endPlayerTurn(s));
+    expect(plan.steps.some((st) => st.entries.some((l) => l.text.includes('gains a telegraph charge')))).toBe(true);
   });
 });
 

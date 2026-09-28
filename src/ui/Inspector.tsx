@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   ENEMY_DEFS,
   RULES,
+  actionsNextTurn,
   coordLabel,
   gmEdit,
   gmPatchEnemy,
@@ -75,11 +76,11 @@ interface EditorProps {
   onClose: () => void;
 }
 
-function EnemyEditor({ e, run, placeMode, setPlaceMode, onClose }: EditorProps & { e: Enemy }) {
+function EnemyEditor({ state, e, run, placeMode, setPlaceMode, onClose }: EditorProps & { e: Enemy }) {
   const def = ENEMY_DEFS[e.kind];
   const patch = (p: Partial<Enemy>, note: string) => run((s) => gmPatchEnemy(s, e.id, p, `${e.id} ${note}`));
   const moving = placeMode?.kind === 'move' && placeMode.id === e.id;
-  const actionsNow = e.kind === 'redactor' ? RULES.redactorActions[e.mode ?? 'guarded'] : def.actions;
+  const actionsNow = actionsNextTurn(state, e);
 
   return (
     <>
@@ -98,7 +99,7 @@ function EnemyEditor({ e, run, placeMode, setPlaceMode, onClose }: EditorProps &
         </button>
       </header>
       <p className="card-text">{def.attackText}</p>
-      <p className="card-text muted">{def.notes}</p>
+      <p className="card-text muted">{def.behavior}</p>
       {def.drop && <p className="card-text">Drops: {def.drop}</p>}
 
       <div className="editor-grid">
