@@ -1,0 +1,115 @@
+/** Board coordinate. x = column (0 = "a"), y = row (0 = row "1", the bottom row on the paper board). */
+export interface Pos {
+  x: number;
+  y: number;
+}
+
+export type Element = 'fire' | 'water' | 'rock';
+export type Shape = 'beam' | 'cross';
+export type Dir = 'up' | 'down' | 'left' | 'right';
+
+export type EnemyKind = 'rat' | 'archer' | 'brute' | 'leech' | 'warden' | 'ward' | 'scrap' | 'redactor';
+
+export interface Statuses {
+  /** Remaining Burn ticks (0 = not burning). */
+  burn: number;
+  /** Turns of Root left (unit can't move during its next turn). */
+  root: number;
+  /** Turns of Stun left (unit can't attack during its next turn). */
+  stun: number;
+}
+
+export type RedactorMode = 'guarded' | 'redacting' | 'spent';
+
+export interface Enemy {
+  /** Display id, e.g. "3a" = first Brute deployed in this room. */
+  id: string;
+  kind: EnemyKind;
+  typeNum: number;
+  /** Order the unit was deployed in the room. Breaks ties in turn order and pathing priority. */
+  deployId: number;
+  pos: Pos;
+  hp: number;
+  maxHp: number;
+  status: Statuses;
+  /** Page Ward attunement. */
+  element?: Element;
+  // Warden
+  turnCount?: number;
+  charge?: boolean;
+  markedLine?: Pos[] | null;
+  // Redactor
+  marks?: number;
+  mode?: RedactorMode;
+  // Page Scrap: number of fragments it is holding
+  stolen?: number;
+}
+
+export interface PlayerState {
+  pos: Pos;
+  hp: number;
+  maxHp: number;
+  mana: number;
+  maxMana: number;
+  potions: number;
+  status: Statuses;
+  unstableUsed: boolean;
+}
+
+export interface ExitState {
+  pos: Pos;
+  locked: boolean;
+}
+
+export interface RoomRuntime {
+  id: string;
+  name: string;
+  blurb: string;
+  width: number;
+  height: number;
+  pillars: Pos[];
+  exit: ExitState | null;
+}
+
+export type Phase = 'player' | 'enemy' | 'roomExit' | 'won' | 'lost';
+
+export type LogSide = 'player' | 'enemy' | 'system' | 'gm';
+
+export interface LogEntry {
+  id: number;
+  roomIndex: number;
+  turn: number;
+  side: LogSide;
+  text: string;
+  /** Something the players must mirror on the paper components (cards, tokens). */
+  paper?: boolean;
+}
+
+export interface GameState {
+  roomIndex: number;
+  room: RoomRuntime;
+  player: PlayerState;
+  enemies: Enemy[];
+  /** Turn counter within the room. Player turn N is followed by enemy turn N. */
+  turn: number;
+  phase: Phase;
+  actionsLeft: number;
+  /** Whether the player took any action this turn (for Burn wear-off). */
+  playerActed: boolean;
+  /** Tiles turned into redaction zone by the Redactor's explosions. Cleared when the player's next turn ends. */
+  redactionZone: Pos[];
+  /** Per-type deploy counters used to label spawned units (e.g. next Page Scrap = "7c"). */
+  typeCounters: Record<number, number>;
+  nextDeployId: number;
+  /** Seeded RNG state, so undo/redo replays the exact same enemy decisions. */
+  rng: number;
+  log: LogEntry[];
+  nextLogId: number;
+}
+
+export interface SpellSpec {
+  element: Element;
+  elementCount: 1 | 2;
+  shape: Shape;
+  shapeCount: 1 | 2;
+}
