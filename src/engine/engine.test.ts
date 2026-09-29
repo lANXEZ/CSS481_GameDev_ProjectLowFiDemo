@@ -239,13 +239,20 @@ describe('warden', () => {
     expect(after.enemies[0].pos.y).toBeGreaterThan(2);
   });
 
-  it('on turn 2 with line of sight it marks then fires on the very next action', () => {
+  it('marking the line ends its turn; the shot fires at the start of its next turn', () => {
     let s = board({ player: 'a1', enemies: [{ kind: 'warden', at: 'a6' }] });
     s.enemies[0].turnCount = 1;
     s = runEnemyTurn(s);
+    // Marked with its first action, then stopped: no shot, no flee with the second action.
+    expect(s.player.hp).toBe(20);
+    expect(at(s, '5a')).toBe('a6');
+    expect(s.enemies[0].markedLine?.map(coordLabel)).toEqual(['a5', 'a4', 'a3', 'a2', 'a1']);
+    expect(s.enemies[0].charge).toBe(false);
+
+    // Standing still on the line gets you hit first thing next turn.
+    s = runEnemyTurn(s);
     expect(s.player.hp).toBe(15);
     expect(s.enemies[0].markedLine).toBeNull();
-    expect(s.enemies[0].charge).toBe(false);
   });
 
   it('a line marked with its last action fires first thing next turn (player can dodge)', () => {
@@ -282,8 +289,8 @@ describe('warden', () => {
 });
 
 describe('boss room', () => {
-  it('wards spawn a scrap each enemy turn; redactor shreds and gains a mark', () => {
-    const s = board({
+  it('wards spawn a scrap every other enemy turn (2, 4, …); redactor shreds and gains a mark every turn', () => {
+    let s = board({
       size: 8,
       player: 'a1',
       enemies: [
@@ -291,10 +298,16 @@ describe('boss room', () => {
         { kind: 'redactor', at: 'h1' },
       ],
     });
-    const after = runEnemyTurn(s);
-    expect(after.enemies.filter((e) => e.kind === 'scrap')).toHaveLength(1);
-    expect(after.enemies.find((e) => e.kind === 'redactor')!.marks).toBe(1);
-    expect(after.log.some((l) => l.paper && l.text.includes('shreds'))).toBe(true);
+    const scraps = () => s.enemies.filter((e) => e.kind === 'scrap').length;
+    s = runEnemyTurn(s); // enemy turn 1
+    expect(scraps()).toBe(0);
+    expect(s.enemies.find((e) => e.kind === 'redactor')!.marks).toBe(1);
+    expect(s.log.some((l) => l.paper && l.text.includes('shreds'))).toBe(true);
+    s = runEnemyTurn(s); // enemy turn 2
+    expect(scraps()).toBe(1);
+    s = runEnemyTurn(s); // enemy turn 3
+    expect(scraps()).toBe(1);
+    expect(s.enemies.find((e) => e.kind === 'redactor')!.marks).toBe(3);
   });
 
   it('redacting mode spends a mark for 5 actions and explodes every action in range', () => {

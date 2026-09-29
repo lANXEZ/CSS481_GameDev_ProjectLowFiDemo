@@ -73,7 +73,7 @@ All numbers live in `src/engine/data.ts` (`RULES`, `ENEMY_DEFS`, `ROOMS`).
 | 3 | Brute | 6 | 2 | Walks to you, 3 dmg to an adjacent tile. |
 | 4 | Leech | 4 | 2 | Walks to you, drains 1 mana from an adjacent tile. |
 | 5 | Warden | 8 | 2 | See below. |
-| 6 | Page Ward | 4 | 0 | Only hurt by its own element. Spawns a Page Scrap on a free tile next to it at the end of every enemy turn. |
+| 6 | Page Ward | 4 | 0 | Only hurt by its own element. Spawns a Page Scrap on a free tile next to it at the end of **every other** enemy turn (2nd, 4th, 6th…). |
 | 7 | Page Scrap | 1 | 3 | Walks to you, touch steals a fragment, then flees for the rest of its life *(default)*. Killing it returns what it stole to your discard pile. |
 | 8 | The Redactor | 18 | 2 / 5 / 3 | See below. |
 
@@ -82,10 +82,9 @@ Normal monsters attack at most once per turn and stop after attacking *(default)
 **Warden (reworked).** It has no normal attack and spends its actions running away from you.
 On its 2nd, 4th, 6th… turn it holds one telegraph charge. With the charge, if you're on one of its 8 lines of sight
 (straight or diagonal, pillars block), it spends 1 action marking that line from itself to the board edge (or the first pillar).
-Its **very next action** fires 5 dmg down the marked line. If the mark used its first action, the shot comes on its
-second action, the same turn. If the mark used its last action, the shot comes on the first action of its next turn,
-so you get one turn to step out. If it never sees you on a charged turn, the charge is lost. Stun cancels a marked
-line *(default)*. Killing it drops the Heal Potion and unlocks the exit.
+**Marking ends its turn**, even with an action left. The first action of its next turn fires 5 dmg down the marked
+line, so you always get one turn to step out of it. If it never sees you on a charged turn, the charge is lost. Stun
+cancels a marked line *(default)*. Killing it drops the Heal Potion and unlocks the exit.
 
 **The Redactor (reworked).**
 - *While any Page Ward stands:* immune to damage, 2 actions. At the end of each of its turns it shreds a fragment

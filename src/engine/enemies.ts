@@ -68,7 +68,8 @@ export function planEnemyTurn(state: GameState): EnemyTurnPlan {
   }
 
   if (s.phase === 'enemy') {
-    spawnScraps(s);
+    if (wardsSpawnOn(s.turn)) spawnScraps(s);
+    else if (s.enemies.some((e) => e.kind === 'ward')) log(s, 'enemy', 'The Page Wards gather ink: no Page Scrap this turn.');
     emit(null);
     s.turn += 1;
     s.phase = 'player';
@@ -89,6 +90,8 @@ interface TurnCtx {
   attacked: boolean;
   /** Archer: direction to back off in this turn (player was adjacent at turn start). */
   backoffDir: Pos | null;
+  /** Set by an action that ends the unit's turn early (Warden marking its line). */
+  endTurn: boolean;
 }
 
 type Decision =
@@ -104,7 +107,7 @@ function orthAdjacent(a: Pos, b: Pos): boolean {
 
 function runUnitTurn(s: GameState, e: Enemy, emit: (actorId: string | null, focus?: Pos[]) => void): void {
   const actions = startUnitTurn(s, e);
-  const ctx: TurnCtx = { acted: false, attacked: false, backoffDir: null };
+  const ctx: TurnCtx = { acted: false, attacked: false, backoffDir: null, endTurn: false };
 
   if (e.kind === 'archer' && orthAdjacent(e.pos, s.player.pos)) {
     ctx.backoffDir = { x: Math.sign(e.pos.x - s.player.pos.x), y: Math.sign(e.pos.y - s.player.pos.y) };
@@ -126,6 +129,7 @@ function runUnitTurn(s: GameState, e: Enemy, emit: (actorId: string | null, focu
     ctx.acted = true;
     emit(e.id, decision.focus);
     if (s.phase !== 'enemy') return;
+    if (ctx.endTurn) break;
   }
   endUnitTurn(s, e, ctx.acted);
   emit(e.id);
@@ -220,7 +224,7 @@ function decide(s: GameState, e: Enemy, ctx: TurnCtx): Decision {
     case 'archer':
       return decideArcher(s, e, ctx);
     case 'warden':
-      return decideWarden(s, e);
+      return decideWarden(s, e, ctx);
     case 'scrap':
       return decideScrap(s, e, ctx);
     case 'redactor':
@@ -286,7 +290,7 @@ export function wardenSightLine(s: GameState, e: Enemy): Pos | null {
   return d;
 }
 
-function decideWarden(s: GameState, e: Enemy): Decision {
+function decideWarden(s: GameState, e: Enemy, ctx: TurnCtx): Decision {
   if (e.markedLine) {
     if (e.status.stun > 0) {
       e.markedLine = null;
@@ -308,10 +312,11 @@ function decideWarden(s: GameState, e: Enemy): Decision {
       return act(line, () => {
         e.charge = false;
         e.markedLine = line;
+        ctx.endTurn = true;
         log(
           s,
           'enemy',
-          `${enemyName(e)} spots YOU and marks a line ${coordLabel(line[0])}–${coordLabel(line[line.length - 1])}. It fires on its next action for ${RULES.wardenShotDamage} dmg.`,
+          `${enemyName(e)} spots YOU and marks a line ${coordLabel(line[0])}–${coordLabel(line[line.length - 1])}. Its turn ends; it fires for ${RULES.wardenShotDamage} dmg at the start of its next turn.`,
         );
       });
     }
@@ -350,6 +355,11 @@ function decideRedactor(s: GameState, e: Enemy): Decision {
     });
   }
   return approach(s, e, neighbors8(s, p));
+}
+
+/** Whether Page Wards spawn Scraps at the end of enemy turn `turn` (every other turn: 2, 4, 6…). */
+export function wardsSpawnOn(turn: number): boolean {
+  return turn % RULES.wardSpawnEvery === 0;
 }
 
 /** End of the enemy turn: each standing Page Ward spawns one Page Scrap next to it. */

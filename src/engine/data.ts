@@ -33,6 +33,8 @@ export const RULES = {
   wardenShotDamage: 5,
   /** Warden gains a telegraph charge on its turns 2, 4, 6, ... */
   wardenChargeEvery: 2,
+  /** Page Wards spawn a Page Scrap after enemy turns 2, 4, 6, ... */
+  wardSpawnEvery: 2,
 
   redactorExplodeDamage: 3,
   redactorActions: { guarded: 2, redacting: 5, spent: 3 },
@@ -120,7 +122,7 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
     attackText: 'No normal attack. A telegraphed 5 dmg line on charged turns.',
     notes: 'Crowned: holds the room key. Otherwise runs away from you.',
     behavior:
-      'Runs away from you. On its 2nd, 4th, 6th… turn, if you are on one of its 8 lines of sight, it marks a line to the board edge and fires 5 dmg down it on its very next action. An unused charge is lost at the end of that turn.',
+      'Runs away from you. On its 2nd, 4th, 6th… turn, if you are on one of its 8 lines of sight, it marks a line to the board edge and its turn ends. The first action of its next turn fires 5 dmg down that line. An unused charge is lost at the end of that turn.',
     drop: 'Heal potion (+ unlocks the exit)',
   },
   ward: {
@@ -132,8 +134,8 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
     attack: 'none',
     damage: 0,
     attackText: 'None. Does not attack.',
-    notes: 'Immune to spells without its attuned element. Spawns 1 Page Scrap at the end of every enemy turn.',
-    behavior: 'Never moves or attacks. At the end of every enemy turn it spawns a Page Scrap on a free tile next to it. While any Ward stands, the Redactor is immune.',
+    notes: 'Immune to spells without its attuned element. Spawns 1 Page Scrap at the end of every other enemy turn.',
+    behavior: 'Never moves or attacks. At the end of every other enemy turn (2nd, 4th, 6th…) it spawns a Page Scrap on a free tile next to it. While any Ward stands, the Redactor is immune.',
     drop: null,
   },
   scrap: {

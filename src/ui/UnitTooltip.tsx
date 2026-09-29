@@ -9,6 +9,7 @@ import {
   manhattan,
   wardenChargedNextTurn,
   wardenSightLine,
+  wardsSpawnOn,
   type Enemy,
   type GameState,
   type Statuses,
@@ -97,7 +98,7 @@ function situation(state: GameState, e: Enemy): string[] {
       break;
     case 'warden':
       if (e.markedLine?.length) {
-        lines.push(`Line marked (${coordLabel(e.markedLine[0])}–${coordLabel(e.markedLine[e.markedLine.length - 1])}): fires ${RULES.wardenShotDamage} dmg on its next action. Get off the red tiles.`);
+        lines.push(`Line marked (${coordLabel(e.markedLine[0])}–${coordLabel(e.markedLine[e.markedLine.length - 1])}): fires ${RULES.wardenShotDamage} dmg at the start of its next turn. Get off the red tiles.`);
       }
       if (e.charge) lines.push('Holding a telegraph charge this turn.');
       else if (wardenChargedNextTurn(e)) {
@@ -107,6 +108,11 @@ function situation(state: GameState, e: Enemy): string[] {
       break;
     case 'ward':
       lines.push(`Only ${e.element} spells hurt it.`);
+      lines.push(
+        wardsSpawnOn(state.turn)
+          ? `Spawns a Page Scrap at the end of enemy turn ${state.turn}.`
+          : `No Page Scrap after enemy turn ${state.turn}; the next one comes after turn ${state.turn + 1}.`,
+      );
       break;
     case 'scrap':
       if ((e.stolen ?? 0) > 0) lines.push(`Holding ${e.stolen} stolen fragment${e.stolen === 1 ? '' : 's'}: it will keep fleeing.`);
