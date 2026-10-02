@@ -19,7 +19,7 @@ export interface Statuses {
   stun: number;
 }
 
-export type RedactorMode = 'guarded' | 'redacting' | 'spent';
+export type RedactorMode = 'guarded' | 'chaos' | 'spent';
 
 export interface Enemy {
   /** Display id, e.g. "3a" = first Brute deployed in this room. */

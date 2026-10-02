@@ -124,7 +124,7 @@ function situation(state: GameState, e: Enemy): string[] {
         lines.push(`Immune: ${wardsLeft} Page Ward${wardsLeft === 1 ? '' : 's'} still standing.`);
         lines.push(`Shreds one of your fragments at the end of each turn and gains a mark (${markText} so far).`);
       } else if (marks > 0) {
-        lines.push(`${markText} left: each one buys a Redacting turn with ${RULES.redactorActions.redacting} actions.`);
+        lines.push(`${markText} left: each one buys a Chaos turn with ${RULES.redactorActions.chaos} actions.`);
       } else {
         lines.push(`Out of marks: ${RULES.redactorActions.spent} actions per turn from now on.`);
       }

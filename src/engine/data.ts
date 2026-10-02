@@ -37,7 +37,7 @@ export const RULES = {
   wardSpawnEvery: 2,
 
   redactorExplodeDamage: 3,
-  redactorActions: { guarded: 2, redacting: 5, spent: 3 },
+  redactorActions: { guarded: 2, chaos: 5, spent: 3 },
 } as const;
 
 export type AttackKind = 'melee' | 'ranged' | 'drain' | 'telegraph' | 'none' | 'steal' | 'explode';
@@ -161,7 +161,7 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
     damage: RULES.redactorExplodeDamage,
     attackText: 'Explodes for 3 dmg on all 8 tiles around it, once per action.',
     notes:
-      'Immune while any Page Ward stands. While Wards stand: shreds 1 fragment and gains 1 mark each turn (2 actions). After all Wards fall: spends 1 mark per turn for Redacting mode (5 actions); when out of marks, 3 actions.',
+      'Immune while any Page Ward stands. While Wards stand: shreds 1 fragment and gains 1 mark each turn (2 actions). After all Wards fall: spends 1 mark per turn for Chaos mode (5 actions); when out of marks, 3 actions.',
     behavior:
       'Walks toward you and explodes on every action while you are in the 8 tiles around it. Exploded tiles become redaction zone: end your next turn there and you lose a fragment for good.',
     drop: null,

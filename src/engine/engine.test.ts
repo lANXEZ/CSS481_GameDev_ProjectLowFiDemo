@@ -310,12 +310,12 @@ describe('boss room', () => {
     expect(s.enemies.find((e) => e.kind === 'redactor')!.marks).toBe(3);
   });
 
-  it('redacting mode spends a mark for 5 actions and explodes every action in range', () => {
+  it('chaos mode spends a mark for 5 actions and explodes every action in range', () => {
     let s = board({ size: 8, player: 'a1', enemies: [{ kind: 'redactor', at: 'b2' }] });
     s.enemies[0].marks = 2;
     s = runEnemyTurn(s);
     const boss = s.enemies[0];
-    expect(boss.mode).toBe('redacting');
+    expect(boss.mode).toBe('chaos');
     expect(boss.marks).toBe(1);
     expect(s.player.hp).toBe(20 - 15);
     expect(s.redactionZone.length).toBeGreaterThan(0);

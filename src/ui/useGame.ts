@@ -13,7 +13,12 @@ interface History {
 
 /** Fill in fields added after a game was saved, so older saves keep working. */
 function upgrade(s: GameState): GameState {
-  return { ...s, pendingLoot: s.pendingLoot ?? [] };
+  return {
+    ...s,
+    pendingLoot: s.pendingLoot ?? [],
+    // "Redacting mode" was renamed to "Chaos mode".
+    enemies: s.enemies.map((e) => ((e.mode as string) === 'redacting' ? { ...e, mode: 'chaos' } : e)),
+  };
 }
 
 function load(): History {

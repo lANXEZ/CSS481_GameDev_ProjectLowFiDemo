@@ -139,7 +139,7 @@ function runUnitTurn(s: GameState, e: Enemy, emit: (actorId: string | null, focu
 export function actionsNextTurn(s: GameState, e: Enemy): number {
   if (e.kind !== 'redactor') return ENEMY_DEFS[e.kind].actions;
   if (wardsStanding(s)) return RULES.redactorActions.guarded;
-  return (e.marks ?? 0) > 0 ? RULES.redactorActions.redacting : RULES.redactorActions.spent;
+  return (e.marks ?? 0) > 0 ? RULES.redactorActions.chaos : RULES.redactorActions.spent;
 }
 
 /** Whether the Warden's next turn is a charged (telegraph) turn. */
@@ -164,12 +164,12 @@ function startUnitTurn(s: GameState, e: Enemy): number {
     }
     if ((e.marks ?? 0) > 0) {
       e.marks = (e.marks ?? 0) - 1;
-      const entering = e.mode !== 'redacting';
-      e.mode = 'redacting';
-      log(s, 'enemy', `${enemyName(e)} ${entering ? 'enters' : 'stays in'} REDACTING MODE: spends 1 mark (${e.marks} left), ${RULES.redactorActions.redacting} actions.`);
-      return RULES.redactorActions.redacting;
+      const entering = e.mode !== 'chaos';
+      e.mode = 'chaos';
+      log(s, 'enemy', `${enemyName(e)} ${entering ? 'enters' : 'stays in'} CHAOS MODE: spends 1 mark (${e.marks} left), ${RULES.redactorActions.chaos} actions.`);
+      return RULES.redactorActions.chaos;
     }
-    if (e.mode === 'redacting') log(s, 'enemy', `${enemyName(e)} is out of marks: Redacting mode ends.`);
+    if (e.mode === 'chaos') log(s, 'enemy', `${enemyName(e)} is out of marks: Chaos mode ends.`);
     e.mode = 'spent';
     return RULES.redactorActions.spent;
   }

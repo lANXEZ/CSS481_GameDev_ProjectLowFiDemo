@@ -89,10 +89,10 @@ cancels a marked line *(default)*. Killing it drops the Heal Potion and unlocks 
 **The Redactor (reworked).**
 - *While any Page Ward stands:* immune to damage, 2 actions. At the end of each of its turns it shreds a fragment
   (a table action) and gains 1 mark.
-- *After all Wards fall:* each turn it spends 1 mark to be in **Redacting mode** with 5 actions. When it has no marks
+- *After all Wards fall:* each turn it spends 1 mark to be in **Chaos mode** with 5 actions. When it has no marks
   left, it has 3 actions from then on.
 - *Attack:* whenever you're in the 8 tiles around it, an action makes it explode for 3 dmg (no friendly fire). It can
-  explode on **every** action, so a 5-action Redacting turn can deal up to 15. Exploded tiles become the
+  explode on **every** action, so a 5-action Chaos turn can deal up to 15. Exploded tiles become the
   **redaction zone**. If you end your next turn inside it, you permanently lose one fragment. Then the zone fades.
 
 ## Project layout

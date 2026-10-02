@@ -296,7 +296,7 @@ function EnemyToken({ e, x, y, selected, acting, shielded, ...handlers }: EnemyT
     <g {...unitProps(handlers)} aria-label={`${unitTitle(e)} ${e.id}, ${e.hp} of ${e.maxHp} HP`}>
       {(selected || acting) && <circle cx={cx} cy={cy} r={r + 5} className={acting ? 'ring-acting' : 'ring-selected'} />}
       {shielded && <circle cx={cx} cy={cy} r={r + 3} className="ring-shield" />}
-      {e.kind === 'redactor' && e.mode === 'redacting' && <circle cx={cx} cy={cy} r={r + 3} className="ring-redacting" />}
+      {e.kind === 'redactor' && e.mode === 'chaos' && <circle cx={cx} cy={cy} r={r + 3} className="ring-chaos" />}
       <circle cx={cx} cy={cy} r={r} fill={tokenColor(e)} filter="url(#token-shadow)" className="token" />
       {e.kind === 'warden' && <path d={`M${cx - 10} ${cy - 13} l4 -8 l6 5 l6 -5 l4 8 z`} className="crown" />}
       <text x={cx} y={cy + (e.element || isBoss ? 1 : 6)} className="token-num">
