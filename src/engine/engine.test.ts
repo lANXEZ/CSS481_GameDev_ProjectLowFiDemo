@@ -378,6 +378,29 @@ describe('boss room', () => {
     expect(plan.intents['7a'].map((i) => i.kind)).toEqual(['move', 'move', 'block']);
   });
 
+  it('after the wards fall, scraps never steal or deliver, even with marks below 5', () => {
+    const s = board({
+      size: 8,
+      player: 'a1',
+      enemies: [
+        { kind: 'scrap', at: 'a2' }, // already next to you
+        { kind: 'scrap', at: 'd1' }, // still carrying an undelivered fragment
+        { kind: 'redactor', at: 'h8' },
+      ],
+    });
+    s.enemies.find((e) => e.kind === 'redactor')!.marks = 2;
+    s.enemies.find((e) => e.id === '7b')!.stolen = 1;
+    const plan = planEnemyTurn(toEnemyTurn(s));
+    const scrap = (id: string) => plan.final.enemies.find((e) => e.id === id)!;
+    expect(scrap('7a').stolen).toBe(0);
+    expect(plan.intents['7a']).toEqual([{ kind: 'block', note: 'blocks your path.' }]);
+    expect(coordLabel(scrap('7b').pos)).toBe('b1');
+    expect(scrap('7b').delivered).toBeFalsy();
+    expect(plan.intents['7b'].map((i) => i.kind)).toEqual(['move', 'move', 'block']);
+    // Marks only drop (Chaos spends one); scraps add none.
+    expect(plan.final.enemies.find((e) => e.kind === 'redactor')!.marks).toBe(1);
+  });
+
   it('chaos mode: 4 actions, and the action after each explosion is a cooldown', () => {
     let s = board({ size: 8, player: 'a1', enemies: [{ kind: 'redactor', at: 'b2' }] });
     s.enemies[0].marks = 2;
@@ -387,7 +410,8 @@ describe('boss room', () => {
     expect(s.enemies[0].mode).toBe('chaos');
     expect(s.enemies[0].marks).toBe(1);
     expect(s.player.hp).toBe(20 - 6);
-    expect(s.erasureZone.length).toBeGreaterThan(0);
+    // The zone is the 3x3 block around the Redactor, including its own tile (b2).
+    expect(s.erasureZone.map(coordLabel).sort()).toEqual(['a1', 'a2', 'a3', 'b1', 'b2', 'b3', 'c1', 'c2', 'c3']);
   });
 
   it('the chaos cooldown resets each turn', () => {
@@ -405,6 +429,30 @@ describe('boss room', () => {
     s = runEnemyTurn(s);
     expect(s.enemies[0].mode).toBe('spent');
     expect(s.player.hp).toBe(20 - 9);
+    // Only Chaos explosions leave an Erasure zone.
+    expect(s.erasureZone).toEqual([]);
+  });
+
+  it('guarded explosions leave no Erasure zone either', () => {
+    let s = board({ size: 8, player: 'a1', enemies: [{ kind: 'ward', at: 'h8', element: 'fire' }, { kind: 'redactor', at: 'b2' }] });
+    s = runEnemyTurn(s);
+    expect(s.enemies.find((e) => e.kind === 'redactor')!.mode).toBe('guarded');
+    expect(s.player.hp).toBe(20 - 6);
+    expect(s.erasureZone).toEqual([]);
+  });
+
+  it('the Erasure zone lasts through your next turn and costs a fragment only if you end it inside', () => {
+    let s = board({ size: 8, player: 'a1', enemies: [{ kind: 'redactor', at: 'b2' }] });
+    s.enemies[0].marks = 1;
+    s = runEnemyTurn(s);
+    expect(s.erasureZone).toHaveLength(9);
+    // Your turn: step out of the 3x3 block (a1 -> a2 -> a3 -> a4), then end the turn safely.
+    s = playerMove(playerMove(s, 'up'), 'up');
+    expect(s.erasureZone).toHaveLength(9);
+    s = playerMove(s, 'up');
+    expect(s.phase).toBe('enemy');
+    expect(s.erasureZone).toEqual([]);
+    expect(s.log.some((l) => l.text.includes('ended your turn inside the Erasure zone'))).toBe(false);
   });
 
   it('ending your turn in the Erasure zone costs a fragment, then the zone fades', () => {

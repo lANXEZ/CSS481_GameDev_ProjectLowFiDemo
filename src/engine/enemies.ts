@@ -424,21 +424,32 @@ function decideScrap(s: GameState, e: Enemy, ctx: TurnCtx): Decision {
   return approach(s, e, neighbors4(s, p));
 }
 
+/** Tiles the explosion damages: the 8 around the Redactor. */
 export function explosionTiles(s: GameState, e: Enemy): Pos[] {
   return neighbors8(s, e.pos).filter((t) => !isPillar(s, t));
+}
+
+/** Tiles a Chaos-mode explosion turns into Erasure zone: the 3×3 block, including the Redactor's own tile. */
+export function erasureTiles(s: GameState, e: Enemy): Pos[] {
+  return [e.pos, ...explosionTiles(s, e)];
 }
 
 function decideRedactor(s: GameState, e: Enemy, ctx: TurnCtx): Decision {
   const p = s.player.pos;
   if (chebyshev(e.pos, p) === 1) {
     if (e.status.stun > 0) return stop('is stunned and can’t explode.');
-    const zone = explosionTiles(s, e);
-    return act({ kind: 'explode', value: RULES.redactorExplodeDamage }, zone, () => {
+    const chaos = e.mode === 'chaos';
+    const focus = chaos ? erasureTiles(s, e) : explosionTiles(s, e);
+    return act({ kind: 'explode', value: RULES.redactorExplodeDamage }, focus, () => {
       log(s, 'enemy', `${enemyName(e)} EXPLODES around ${coordLabel(e.pos)}.`);
       damagePlayer(s, RULES.redactorExplodeDamage, enemyName(e));
-      const keys = new Set(s.erasureZone.map(posKey));
-      for (const t of zone) if (!keys.has(posKey(t))) s.erasureZone.push(t);
-      if (e.mode === 'chaos') ctx.cooldown = true;
+      // Only Chaos-mode explosions leave an Erasure zone.
+      if (chaos) {
+        const keys = new Set(s.erasureZone.map(posKey));
+        for (const t of erasureTiles(s, e)) if (!keys.has(posKey(t))) s.erasureZone.push(t);
+        log(s, 'enemy', `The blast leaves an Erasure zone on the 9 tiles around ${coordLabel(e.pos)}. End your next turn there and you lose a fragment for good.`);
+        ctx.cooldown = true;
+      }
     });
   }
   return approach(s, e, neighbors8(s, p));

@@ -176,7 +176,7 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
     notes:
       'Immune while any Page Ward stands (2 actions). Gains marks (max 5) from Page Scraps that bring it a stolen fragment. After all Wards fall: spends 1 mark per turn for Chaos mode (4 actions, each explosion followed by a cooldown action); when out of marks, 3 actions.',
     behavior:
-      'Walks toward you and explodes whenever you are in the 8 tiles around it. In Chaos mode the action after an explosion is a cooldown. Exploded tiles become Erasure zone: end your next turn there and you lose a fragment for good.',
+      'Walks toward you and explodes whenever you are in the 8 tiles around it. In Chaos mode the action after an explosion is a cooldown, and each explosion leaves an Erasure zone on the 9 tiles around it (its own tile included): end your next turn there and you lose a fragment for good.',
     drop: null,
   },
 };

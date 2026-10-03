@@ -159,7 +159,7 @@ It has no normal attack. Each action, it checks these in order:
 | Wards stand, carrying a fragment it hasn't delivered | Runs to the Redactor. On reaching any of the 8 tiles around it, the Redactor **gains 1 mark**. This is free and costs no action. The fragment stays on the Scrap. |
 | Wards stand, already delivered | Keeps away from you for good. It doesn't steal again. |
 | Wards stand, Redactor at 5/5 marks | Won't steal, and keeps away from you. If it arrives with a fragment when marks are full, it adds nothing. |
-| **All Wards have fallen** | Every Scrap runs at you and **blocks your path**: it stops on a tile next to you and does nothing else. No stealing. |
+| **All Wards have fallen** | Every Scrap runs at you and **blocks your path**: it stops on a tile next to you and does nothing else. No stealing and no deliveries, **however many marks the Redactor has**, even with fewer than 5. A Scrap still holding a fragment keeps it until it dies. |
 
 When a Scrap dies, every fragment it holds **goes back into your hand** (not the discard pile).
 
@@ -182,7 +182,8 @@ It's always last in the enemy turn. Its mode is set at the start of each of its 
 - **Guarded and Spent modes** have no cooldown: it explodes on every action while you're in range.
 - **Stun:** it can't explode. If you're next to it, it ends its turn on the spot; otherwise it still walks toward you.
 - **Root** stops it walking, but it still explodes if you're next to it.
-- **Explosions** turn the blasted tiles into the [Erasure zone](#erasure-zone).
+- **Chaos explosions leave an Erasure zone** on the 9 tiles of the 3×3 block around it, including the tile it
+  stands on. Explosions in Guarded and Spent modes deal damage but leave no zone. See [Erasure zone](#erasure-zone).
 - **Killing it wins the demo.**
 
 ## The board
@@ -192,7 +193,7 @@ It's always last in the enemy turn. Its mode is set at the start of each of its 
 | **Pillar** (PIL) | Blocks movement, line of sight, Archer shots, the Warden's line and spells. |
 | **Exit** | Walk onto it to move to the next room. A **locked** exit (Room 2) can't be entered until the Warden dies. |
 | **Marked line** (red hatching) | The Warden's line, which fires 5 dmg on its next turn. |
-| <a id="erasure-zone"></a>**Erasure zone** (black bars) | Every tile the Redactor's explosions covered during the enemy turn. End your next turn inside it and you permanently lose one fragment from your hand. Then the zone fades. |
+| <a id="erasure-zone"></a>**Erasure zone** (black bars) | Left by the Redactor's **Chaos-mode** explosions: the 3×3 block around it, its own tile included. Several explosions in one turn add up. End your next turn inside it and you permanently lose one fragment from your hand. Then the zone fades. |
 | **Dashed purple ring** | The Redactor is protected by its Wards. |
 | **Thick black ring** | The Redactor is in Chaos mode. |
 | **Badges** | On the token's right: **B***n* = Burn ticks left, **R** = rooted, **S** = stunned. On its left: **⚡** = the Warden holds a charge, **F***n* = fragments a Scrap is holding. |
