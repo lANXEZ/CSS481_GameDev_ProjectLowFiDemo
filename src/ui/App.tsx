@@ -12,6 +12,7 @@ import {
   gmMovePlayer,
   moveTarget,
   planEnemyTurn,
+  previewIntents,
   playerCast,
   playerDrinkPotion,
   playerMeditate,
@@ -51,6 +52,10 @@ export function App() {
 
   // The enemy turn is fully determined by the state (seeded RNG), so it can be derived.
   const plan = useMemo(() => (state.phase === 'enemy' ? planEnemyTurn(state) : null), [state]);
+
+  // Enemy intentions: during the player's turn, a preview of what each enemy does if the turn ended now.
+  // Recomputed after every action; exact, because enemy randomness is seeded in the state.
+  const intents = useMemo(() => (plan ? plan.intents : previewIntents(state)), [plan, state]);
   useEffect(() => setStepIndex(-1), [plan]);
 
   // Drop a selection whose unit has died.
@@ -181,6 +186,7 @@ export function App() {
           <div className="board-frame">
             <Board
               state={shown}
+              intents={intents}
               highlights={highlights}
               selectedId={selectedId}
               onTileClick={onTileClick}
@@ -326,7 +332,7 @@ function Legend() {
         <span className="lg lg-marked" /> Warden’s marked line
       </li>
       <li>
-        <span className="lg lg-redacted" /> Redaction zone
+        <span className="lg lg-erased" /> Erasure zone
       </li>
       <li>
         <span className="lg lg-shield" /> Protected by wards

@@ -3,21 +3,24 @@ import {
   ENEMY_DEFS,
   RULES,
   actionsNextTurn,
-  archerCanShoot,
   chebyshev,
   coordLabel,
-  manhattan,
+  redactorMarksFull,
   wardenChargedNextTurn,
   wardenSightLine,
   wardsSpawnOn,
+  wardsStanding,
   type Enemy,
   type GameState,
+  type Intent,
   type Statuses,
 } from '../engine';
-import { PLAYER_COLOR, cap, hpColor, tokenColor, unitTitle } from './look';
+import { PLAYER_COLOR, cap, describeIntents, hpColor, tokenColor, unitTitle } from './look';
 
 interface Props {
   state: GameState;
+  /** The unit's planned actions for the coming enemy turn. */
+  intents?: Intent[];
   /** Enemy id or "player". */
   unitId: string;
   /** Screen rect of the hovered token; the card is placed beside it. */
@@ -25,7 +28,7 @@ interface Props {
 }
 
 /** Hover card explaining what a unit is, how it behaves, and what it's doing right now. */
-export function UnitTooltip({ state, unitId, anchor }: Props) {
+export function UnitTooltip({ state, intents, unitId, anchor }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   const enemy = state.enemies.find((e) => e.id === unitId);
@@ -52,7 +55,7 @@ export function UnitTooltip({ state, unitId, anchor }: Props) {
       role="tooltip"
       style={pos ? { left: pos.left, top: pos.top } : { left: -9999, top: 0, visibility: 'hidden' }}
     >
-      {enemy ? <EnemyInfo state={state} e={enemy} /> : <PlayerInfo state={state} />}
+      {enemy ? <EnemyInfo state={state} e={enemy} intents={intents} /> : <PlayerInfo state={state} />}
       <p className="tip-foot">Click the token to edit it.</p>
     </div>
   );
@@ -83,27 +86,17 @@ function statusLines(st: Statuses, who: string): string[] {
 function situation(state: GameState, e: Enemy): string[] {
   const lines = statusLines(e.status, 'it');
   const p = state.player.pos;
-  const adjacent = manhattan(e.pos, p) === 1;
   const wardsLeft = state.enemies.filter((x) => x.kind === 'ward').length;
 
   switch (e.kind) {
-    case 'rat':
-    case 'brute':
-    case 'leech':
-      if (adjacent && e.status.stun === 0) lines.push(e.kind === 'leech' ? 'Next to you: it drains your mana on its turn.' : 'Next to you: it attacks on its turn.');
-      break;
-    case 'archer':
-      if (adjacent) lines.push('You’re next to it: it backs away on its turn instead of shooting.');
-      else if (archerCanShoot(state, e)) lines.push('It has a clear shot at you from here.');
-      break;
     case 'warden':
       if (e.markedLine?.length) {
         lines.push(`Line marked (${coordLabel(e.markedLine[0])}–${coordLabel(e.markedLine[e.markedLine.length - 1])}): fires ${RULES.wardenShotDamage} dmg at the start of its next turn. Get off the red tiles.`);
       }
       if (e.charge) lines.push('Holding a telegraph charge this turn.');
       else if (wardenChargedNextTurn(e)) {
-        lines.push(wardenSightLine(state, e) ? 'Charged next turn, and it can see you right now.' : 'Charged next turn: stay off its straight and diagonal lines.');
-      } else lines.push('No charge next turn: it will just run.');
+        lines.push(wardenSightLine(state, e) ? 'Charged next turn, and it can see you right now.' : 'Charged next turn: it will try to get a clear line to you.');
+      } else lines.push('No charge next turn: it only repositions.');
       lines.push('Killing it unlocks the exit.');
       break;
     case 'ward':
@@ -114,28 +107,34 @@ function situation(state: GameState, e: Enemy): string[] {
           : `No Page Scrap after enemy turn ${state.turn}; the next one comes after turn ${state.turn + 1}.`,
       );
       break;
-    case 'scrap':
-      if ((e.stolen ?? 0) > 0) lines.push(`Holding ${e.stolen} stolen fragment${e.stolen === 1 ? '' : 's'}: it will keep fleeing.`);
+    case 'scrap': {
+      const held = e.stolen ?? 0;
+      if (held > 0) lines.push(`Holding ${held} stolen fragment${held === 1 ? '' : 's'}. Kill it to get ${held === 1 ? 'it' : 'them'} back in your hand.`);
+      if (!wardsStanding(state)) lines.push('The Wards are down: it only blocks you now.');
+      else if (e.delivered) lines.push('Already gave the Redactor its mark: it keeps away from you.');
+      else if (held > 0) lines.push('Carrying the fragment to the Redactor for a mark.');
+      else if (redactorMarksFull(state)) lines.push(`The Redactor's marks are full (${RULES.redactorMaxMarks}/${RULES.redactorMaxMarks}): it won't steal.`);
       break;
+    }
     case 'redactor': {
       const marks = e.marks ?? 0;
-      const markText = `${marks} mark${marks === 1 ? '' : 's'}`;
+      const markText = `${marks}/${RULES.redactorMaxMarks} marks`;
       if (wardsLeft > 0) {
         lines.push(`Immune: ${wardsLeft} Page Ward${wardsLeft === 1 ? '' : 's'} still standing.`);
-        lines.push(`Shreds one of your fragments at the end of each turn and gains a mark (${markText} so far).`);
+        lines.push(`${markText}. Page Scraps add one each time they bring it a stolen fragment.`);
       } else if (marks > 0) {
-        lines.push(`${markText} left: each one buys a Chaos turn with ${RULES.redactorActions.chaos} actions.`);
+        lines.push(`${markText} left: each one buys a Chaos turn (${RULES.redactorActions.chaos} actions, a cooldown after each explosion).`);
       } else {
         lines.push(`Out of marks: ${RULES.redactorActions.spent} actions per turn from now on.`);
       }
-      if (chebyshev(e.pos, p) === 1) lines.push('You’re in its blast zone: it explodes on every action.');
+      if (chebyshev(e.pos, p) === 1) lines.push('You’re in its blast zone.');
       break;
     }
   }
   return lines;
 }
 
-function EnemyInfo({ state, e }: { state: GameState; e: Enemy }) {
+function EnemyInfo({ state, e, intents }: { state: GameState; e: Enemy; intents?: Intent[] }) {
   const def = ENEMY_DEFS[e.kind];
   const actions = actionsNextTurn(state, e);
   const now = situation(state, e);
@@ -158,6 +157,11 @@ function EnemyInfo({ state, e }: { state: GameState; e: Enemy }) {
         <dt>Attack</dt>
         <dd>{def.attackText}</dd>
       </dl>
+      {(intents?.length ?? 0) > 0 && (
+        <p className="tip-intent">
+          <strong>Next turn:</strong> {describeIntents(intents)}
+        </p>
+      )}
       <p className="tip-behavior">{def.behavior}</p>
       {now.length > 0 && (
         <ul className="tip-now" aria-label="Right now">

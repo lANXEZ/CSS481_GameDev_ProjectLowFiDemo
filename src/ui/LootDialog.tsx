@@ -33,6 +33,7 @@ interface Props {
 /** Shown after enemies die: tells the table which loot cards to add to the discard pile. */
 export function LootDialog({ notices, onConfirm }: Props) {
   const hasDiscard = notices.some((n) => n.discard.length > 0);
+  const hasHand = notices.some((n) => (n.toHand ?? []).length > 0);
   const title = notices.length === 1 ? `${notices[0].enemyName} defeated` : `${notices.length} enemies defeated`;
 
   return (
@@ -40,9 +41,9 @@ export function LootDialog({ notices, onConfirm }: Props) {
       <div className="modal loot-modal">
         <h2 id="loot-title">{title}</h2>
         <p>
-          {hasDiscard
-            ? 'Take these loot cards from the loot pile and add them to your discard pile. They’ll come back when the deck is reshuffled.'
-            : 'Take the loot from the table.'}
+          {hasDiscard && 'Take these loot cards from the loot pile and add them to your discard pile. They’ll come back when the deck is reshuffled. '}
+          {hasHand && 'Take back the fragments the Page Scrap stole (from under its token) and put them in your hand. '}
+          {!hasDiscard && !hasHand && 'Take the loot from the table.'}
         </p>
 
         <ul className="loot-list">
@@ -61,6 +62,9 @@ export function LootDialog({ notices, onConfirm }: Props) {
                   const look = cardLook(card);
                   return <LootCard key={card} {...look} note="Add to discard pile" />;
                 })}
+                {(n.toHand ?? []).map((card) => (
+                  <LootCard key={card} category="Stolen" title="Fragments" color="#5b5470" note={`${card}: back to hand`} />
+                ))}
                 {n.enemyKind === 'warden' && <LootCard category="Item" title="Heal Potion" color="#9e3a3f" note="Keep in hand" />}
               </div>
               {n.extras.length > 0 && (
@@ -76,7 +80,7 @@ export function LootDialog({ notices, onConfirm }: Props) {
 
         <div className="modal-actions">
           <button className="btn btn-primary" onClick={onConfirm} autoFocus>
-            {hasDiscard ? 'Added to discard pile' : 'Done'}
+            {hasDiscard && !hasHand ? 'Added to discard pile' : hasHand && !hasDiscard ? 'Back in hand' : 'Done'}
           </button>
         </div>
       </div>

@@ -9,7 +9,7 @@ export const RULES = {
   roomStartMana: 3,
   actionsPerTurn: 3,
   meditateMana: 3,
-  potionHeal: 5,
+  potionHeal: 10,
   handSize: 5,
 
   burnTicks: 3,
@@ -37,7 +37,9 @@ export const RULES = {
   wardSpawnEvery: 2,
 
   redactorExplodeDamage: 3,
-  redactorActions: { guarded: 2, chaos: 5, spent: 3 },
+  redactorActions: { guarded: 2, chaos: 4, spent: 3 },
+  /** Marks the Redactor can hold. Page Scraps stop stealing once it's full. */
+  redactorMaxMarks: 5,
 } as const;
 
 export type AttackKind = 'melee' | 'ranged' | 'drain' | 'telegraph' | 'none' | 'steal' | 'explode';
@@ -54,12 +56,15 @@ export interface EnemyDef {
   notes: string;
   /** What the enemy AI actually does on its turn, in plain words. */
   behavior: string;
+  /** Short name shown on the board token. */
+  shortName: string;
   drop: string | null;
 }
 
 export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
   rat: {
     kind: 'rat',
+    shortName: 'Rat',
     typeNum: 1,
     name: 'Rat',
     hp: 2,
@@ -73,6 +78,7 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
   },
   archer: {
     kind: 'archer',
+    shortName: 'Archer',
     typeNum: 2,
     name: 'Archer',
     hp: 3,
@@ -87,6 +93,7 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
   },
   brute: {
     kind: 'brute',
+    shortName: 'Brute',
     typeNum: 3,
     name: 'Brute',
     hp: 6,
@@ -100,6 +107,7 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
   },
   leech: {
     kind: 'leech',
+    shortName: 'Leech',
     typeNum: 4,
     name: 'Leech',
     hp: 4,
@@ -113,6 +121,7 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
   },
   warden: {
     kind: 'warden',
+    shortName: 'Warden',
     typeNum: 5,
     name: 'Warden',
     hp: 8,
@@ -120,13 +129,14 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
     attack: 'telegraph',
     damage: RULES.wardenShotDamage,
     attackText: 'No normal attack. A telegraphed 5 dmg line on charged turns.',
-    notes: 'Crowned: holds the room key. Otherwise runs away from you.',
+    notes: 'Crowned: holds the room key. Hunts for a clear line to you.',
     behavior:
-      'Runs away from you. On its 2nd, 4th, 6th… turn, if you are on one of its 8 lines of sight, it marks a line to the board edge and its turn ends. The first action of its next turn fires 5 dmg down that line. An unused charge is lost at the end of that turn.',
+      'Walks the shortest path to a tile where it can see you (straight or diagonal, pillars block), then holds still. On its 2nd, 4th, 6th… turn, once it sees you it marks a line to the board edge and its turn ends. The first action of its next turn fires 5 dmg down that line. An unused charge is lost at the end of that turn.',
     drop: 'Heal potion (+ unlocks the exit)',
   },
   ward: {
     kind: 'ward',
+    shortName: 'Ward',
     typeNum: 6,
     name: 'Page Ward',
     hp: 4,
@@ -140,30 +150,33 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
   },
   scrap: {
     kind: 'scrap',
+    shortName: 'Scrap',
     typeNum: 7,
     name: 'Page Scrap',
     hp: 1,
-    actions: 3,
+    actions: 4,
     attack: 'steal',
     damage: 0,
     attackText: 'Touch (1 action): steals a fragment from your hand.',
-    notes: 'Flees with its remaining actions once it holds a fragment.',
-    behavior: 'Runs to you and steals a fragment with a touch, then spends every action from then on fleeing. Kill it to get the fragment back.',
-    drop: 'The fragment it stole',
+    notes: 'Feeds the Redactor marks while the Wards stand. Blocks you once they fall.',
+    behavior:
+      'While Wards stand: runs to you and steals a fragment, carries it to the Redactor (any of the 8 tiles around it) to give it 1 mark, then keeps away from you for good. It stops stealing once the Redactor has 5 marks. After all Wards fall, every Scrap runs at you to block your path, without stealing.',
+    drop: 'Returns any stolen fragments to your hand',
   },
   redactor: {
     kind: 'redactor',
+    shortName: 'Redactor',
     typeNum: 8,
     name: 'The Redactor',
     hp: 18,
     actions: RULES.redactorActions.guarded,
     attack: 'explode',
     damage: RULES.redactorExplodeDamage,
-    attackText: 'Explodes for 3 dmg on all 8 tiles around it, once per action.',
+    attackText: 'Explodes for 3 dmg on all 8 tiles around it.',
     notes:
-      'Immune while any Page Ward stands. While Wards stand: shreds 1 fragment and gains 1 mark each turn (2 actions). After all Wards fall: spends 1 mark per turn for Chaos mode (5 actions); when out of marks, 3 actions.',
+      'Immune while any Page Ward stands (2 actions). Gains marks (max 5) from Page Scraps that bring it a stolen fragment. After all Wards fall: spends 1 mark per turn for Chaos mode (4 actions, each explosion followed by a cooldown action); when out of marks, 3 actions.',
     behavior:
-      'Walks toward you and explodes on every action while you are in the 8 tiles around it. Exploded tiles become redaction zone: end your next turn there and you lose a fragment for good.',
+      'Walks toward you and explodes whenever you are in the 8 tiles around it. In Chaos mode the action after an explosion is a cooldown. Exploded tiles become Erasure zone: end your next turn there and you lose a fragment for good.',
     drop: null,
   },
 };

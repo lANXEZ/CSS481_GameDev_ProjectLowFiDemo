@@ -13,9 +13,12 @@ interface History {
 
 /** Fill in fields added after a game was saved, so older saves keep working. */
 function upgrade(s: GameState): GameState {
+  const old = s as GameState & { redactionZone?: GameState['erasureZone'] };
   return {
     ...s,
-    pendingLoot: s.pendingLoot ?? [],
+    // "Redaction zone" was renamed to "Erasure zone".
+    erasureZone: s.erasureZone ?? old.redactionZone ?? [],
+    pendingLoot: (s.pendingLoot ?? []).map((n) => ({ ...n, toHand: n.toHand ?? [] })),
     // "Redacting mode" was renamed to "Chaos mode".
     enemies: s.enemies.map((e) => ((e.mode as string) === 'redacting' ? { ...e, mode: 'chaos' } : e)),
   };

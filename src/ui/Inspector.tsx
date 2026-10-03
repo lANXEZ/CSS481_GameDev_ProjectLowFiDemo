@@ -120,10 +120,20 @@ function EnemyEditor({ state, e, run, placeMode, setPlaceMode, onClose }: Editor
           </>
         )}
         {e.kind === 'redactor' && (
-          <Stepper label="Marks" value={e.marks ?? 0} min={0} max={20} onChange={(v) => patch({ marks: v }, `marks → ${v}`)} />
+          <Stepper label="Marks" value={e.marks ?? 0} min={0} max={RULES.redactorMaxMarks} onChange={(v) => patch({ marks: v }, `marks → ${v}`)} />
         )}
         {e.kind === 'scrap' && (
-          <Stepper label="Stolen fragments" value={e.stolen ?? 0} min={0} max={5} onChange={(v) => patch({ stolen: v }, `stolen → ${v}`)} />
+          <>
+            <Stepper label="Stolen fragments" value={e.stolen ?? 0} min={0} max={5} onChange={(v) => patch({ stolen: v }, `stolen → ${v}`)} />
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={!!e.delivered}
+                onChange={(ev) => patch({ delivered: ev.target.checked }, `delivered ${ev.target.checked ? 'yes' : 'no'}`)}
+              />
+              Already gave the Redactor its mark
+            </label>
+          </>
         )}
       </div>
 

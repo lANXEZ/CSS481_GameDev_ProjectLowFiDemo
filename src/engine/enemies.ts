@@ -8,7 +8,7 @@ import {
   log,
   wardsStanding,
 } from './core';
-import { spawnEnemy } from './game';
+import { endPlayerTurn, spawnEnemy } from './game';
 import {
   DIRS8,
   addPos,
@@ -26,7 +26,7 @@ import {
   stepToward,
 } from './grid';
 import { pick } from './rng';
-import type { Enemy, GameState, LogEntry, Pos } from './types';
+import type { Enemy, GameState, Intent, IntentKind, LogEntry, Pos } from './types';
 
 export interface EnemyStep {
   /** Enemy that acted, or null for turn-level events (spawns, start of the player's turn). */
@@ -34,13 +34,15 @@ export interface EnemyStep {
   entries: LogEntry[];
   /** Tiles to highlight on the board for this step (movement, attack area, marked line…). */
   focus: Pos[];
-  /** Full game state right after this step. */
+  /** Full game state right after this step (omitted when planning without snapshots). */
   state: GameState;
 }
 
 export interface EnemyTurnPlan {
   steps: EnemyStep[];
   final: GameState;
+  /** What each enemy does this turn, in order, keyed by enemy id. */
+  intents: Record<string, Intent[]>;
 }
 
 /** Enemies act by type number (Rat 1 … Redactor 8), then by deploy order. */
@@ -48,27 +50,33 @@ export function turnOrder(state: GameState): Enemy[] {
   return [...state.enemies].sort((a, b) => a.typeNum - b.typeNum || a.deployId - b.deployId);
 }
 
-/** Resolve the whole enemy turn, recording every action as a step the GM can walk through. */
-export function planEnemyTurn(state: GameState): EnemyTurnPlan {
+/**
+ * Resolve the whole enemy turn, recording every action as a step the GM can walk through.
+ * With `snapshots: false` the per-step states are skipped (used for cheap intent previews).
+ */
+export function planEnemyTurn(state: GameState, opts: { snapshots?: boolean } = {}): EnemyTurnPlan {
   if (state.phase !== 'enemy') throw new RuleError('It is not the enemy turn.');
+  const snapshots = opts.snapshots ?? true;
   const s = cloneState(state);
   const steps: EnemyStep[] = [];
+  const intents: Record<string, Intent[]> = {};
   let mark = s.log.length;
   const emit = (actorId: string | null, focus: Pos[] = []) => {
     const entries = s.log.slice(mark);
     mark = s.log.length;
     if (entries.length === 0) return;
-    steps.push({ actorId, entries, focus, state: cloneState(s) });
+    steps.push({ actorId, entries, focus, state: snapshots ? cloneState(s) : s });
   };
+  const recorder = (id: string) => (intent: Intent) => (intents[id] ??= []).push(intent);
 
   for (const { id } of turnOrder(s)) {
     if (s.phase !== 'enemy') break;
     const e = s.enemies.find((x) => x.id === id);
-    if (e) runUnitTurn(s, e, emit);
+    if (e) runUnitTurn(s, e, emit, recorder(id));
   }
 
   if (s.phase === 'enemy') {
-    if (wardsSpawnOn(s.turn)) spawnScraps(s);
+    if (wardsSpawnOn(s.turn)) spawnScraps(s, recorder);
     else if (s.enemies.some((e) => e.kind === 'ward')) log(s, 'enemy', 'The Page Wards gather ink: no Page Scrap this turn.');
     emit(null);
     s.turn += 1;
@@ -80,7 +88,18 @@ export function planEnemyTurn(state: GameState): EnemyTurnPlan {
   } else {
     emit(null);
   }
-  return { steps, final: s };
+  return { steps, final: s, intents };
+}
+
+/**
+ * What every enemy will do on its coming turn, assuming the player ends their turn now.
+ * Enemy randomness is seeded in the state, so this matches the real enemy turn exactly
+ * until the player does something else.
+ */
+export function previewIntents(state: GameState): Record<string, Intent[]> {
+  if (state.phase === 'enemy') return planEnemyTurn(state, { snapshots: false }).intents;
+  if (state.phase !== 'player') return {};
+  return planEnemyTurn(endPlayerTurn(state), { snapshots: false }).intents;
 }
 
 // ---------------------------------------------------------------------------
@@ -92,22 +111,38 @@ interface TurnCtx {
   backoffDir: Pos | null;
   /** Set by an action that ends the unit's turn early (Warden marking its line). */
   endTurn: boolean;
+  /** Redactor in Chaos mode: the next action is a cooldown. Resets every turn. */
+  cooldown: boolean;
+  /** Record an intent for this unit (also used by actions that trigger extra effects). */
+  record: (intent: Intent) => void;
 }
 
 type Decision =
-  | { kind: 'act'; focus: Pos[]; run: () => void }
-  | { kind: 'stop'; reason?: string };
+  | { kind: 'act'; intent: Intent; focus: Pos[]; run: () => void }
+  /** `intent` is shown when the unit ends its turn this way (e.g. Warden watching, Scrap blocking). */
+  | { kind: 'stop'; reason?: string; intent?: IntentKind };
 
-const act = (focus: Pos[], run: () => void): Decision => ({ kind: 'act', focus, run });
-const stop = (reason?: string): Decision => ({ kind: 'stop', reason });
+const act = (intent: Intent, focus: Pos[], run: () => void): Decision => ({ kind: 'act', intent, focus, run });
+const stop = (reason?: string, intent?: IntentKind): Decision => ({ kind: 'stop', reason, intent });
 
 function orthAdjacent(a: Pos, b: Pos): boolean {
   return manhattan(a, b) === 1;
 }
 
-function runUnitTurn(s: GameState, e: Enemy, emit: (actorId: string | null, focus?: Pos[]) => void): void {
+function runUnitTurn(
+  s: GameState,
+  e: Enemy,
+  emit: (actorId: string | null, focus?: Pos[]) => void,
+  record: (intent: Intent) => void,
+): void {
   const actions = startUnitTurn(s, e);
-  const ctx: TurnCtx = { acted: false, attacked: false, backoffDir: null, endTurn: false };
+  const ctx: TurnCtx = { acted: false, attacked: false, backoffDir: null, endTurn: false, cooldown: false, record };
+  let recorded = 0;
+  const rec = (intent: Intent) => {
+    recorded++;
+    record(intent);
+  };
+  ctx.record = rec;
 
   if (e.kind === 'archer' && orthAdjacent(e.pos, s.player.pos)) {
     ctx.backoffDir = { x: Math.sign(e.pos.x - s.player.pos.x), y: Math.sign(e.pos.y - s.player.pos.y) };
@@ -115,9 +150,20 @@ function runUnitTurn(s: GameState, e: Enemy, emit: (actorId: string | null, focu
   }
 
   for (let i = 0; i < actions; i++) {
+    if (e.kind === 'scrap') tryDeliver(s, e, ctx);
+    if (ctx.cooldown) {
+      // A cooldown is a spent action that does nothing, so it doesn't trigger Burn.
+      ctx.cooldown = false;
+      rec({ kind: 'cooldown' });
+      log(s, 'enemy', `${enemyName(e)} cools down after the explosion.`);
+      emit(e.id, [e.pos]);
+      continue;
+    }
     const decision = decide(s, e, ctx);
     if (decision.kind === 'stop') {
       if (decision.reason) log(s, 'enemy', `${enemyName(e)} ${decision.reason}`);
+      if (decision.intent) rec({ kind: decision.intent, note: decision.reason });
+      else if (recorded === 0 && actions > 0) rec({ kind: 'wait', note: decision.reason });
       break;
     }
     if (burnTickEnemy(s, e)) {
@@ -125,8 +171,10 @@ function runUnitTurn(s: GameState, e: Enemy, emit: (actorId: string | null, focu
       return;
     }
     if (s.phase !== 'enemy') break;
+    rec(decision.intent);
     decision.run();
     ctx.acted = true;
+    if (e.kind === 'scrap') tryDeliver(s, e, ctx);
     emit(e.id, decision.focus);
     if (s.phase !== 'enemy') return;
     if (ctx.endTurn) break;
@@ -187,17 +235,13 @@ function endUnitTurn(s: GameState, e: Enemy, acted: boolean): void {
     e.charge = false;
     log(s, 'enemy', `${enemyName(e)} never saw you, so its charge is lost.`);
   }
-  if (e.kind === 'redactor' && e.mode === 'guarded') {
-    e.marks = (e.marks ?? 0) + 1;
-    log(s, 'enemy', `${enemyName(e)} shreds a fragment: move one card from your hand to the discard pile. It gains a mark (${e.marks}).`, true);
-  }
 }
 
-function moveTo(s: GameState, e: Enemy, to: Pos): Decision {
+function moveTo(s: GameState, e: Enemy, to: Pos, kind: 'move' | 'retreat' = 'move'): Decision {
   const from = e.pos;
-  return act([from, to], () => {
+  return act({ kind }, [from, to], () => {
     e.pos = to;
-    log(s, 'enemy', `${enemyName(e)} moves ${coordLabel(from)} → ${coordLabel(to)}.`);
+    log(s, 'enemy', `${enemyName(e)} ${kind === 'retreat' ? 'retreats' : 'moves'} ${coordLabel(from)} → ${coordLabel(to)}.`);
   });
 }
 
@@ -212,7 +256,7 @@ function flee(s: GameState, e: Enemy): Decision {
   if (e.status.root > 0) return stop('is rooted and can’t run.');
   const step = stepAway(s, e, s.player.pos);
   if (!step) return stop('is cornered and holds position.');
-  return moveTo(s, e, step);
+  return moveTo(s, e, step, 'retreat');
 }
 
 function decide(s: GameState, e: Enemy, ctx: TurnCtx): Decision {
@@ -228,7 +272,7 @@ function decide(s: GameState, e: Enemy, ctx: TurnCtx): Decision {
     case 'scrap':
       return decideScrap(s, e, ctx);
     case 'redactor':
-      return decideRedactor(s, e);
+      return decideRedactor(s, e, ctx);
     case 'ward':
       return stop();
   }
@@ -239,9 +283,11 @@ function decideMelee(s: GameState, e: Enemy, ctx: TurnCtx): Decision {
   const p = s.player.pos;
   if (orthAdjacent(e.pos, p)) {
     if (e.status.stun > 0) return stop('is stunned and can’t attack.');
-    return act([p], () => {
+    const leech = e.kind === 'leech';
+    const intent: Intent = leech ? { kind: 'drain', value: ENEMY_DEFS.leech.damage } : { kind: 'attack', value: ENEMY_DEFS[e.kind].damage };
+    return act(intent, [p], () => {
       ctx.attacked = true;
-      if (e.kind === 'leech') {
+      if (leech) {
         const before = s.player.mana;
         s.player.mana = Math.max(0, before - ENEMY_DEFS.leech.damage);
         log(s, 'enemy', `${enemyName(e)} drains YOUR mana (${before} → ${s.player.mana}).`);
@@ -269,13 +315,13 @@ function decideArcher(s: GameState, e: Enemy, ctx: TurnCtx): Decision {
     const straight = addPos(e.pos, ctx.backoffDir);
     const to = isWalkable(s, straight, e.id) ? straight : stepAway(s, e, s.player.pos);
     if (!to) return stop('is cornered and can’t back off.');
-    return moveTo(s, e, to);
+    return moveTo(s, e, to, 'retreat');
   }
   if (ctx.attacked) return stop();
   if (archerCanShoot(s, e)) {
     if (e.status.stun > 0) return stop('is stunned and can’t shoot.');
     const p = s.player.pos;
-    return act([p], () => {
+    return act({ kind: 'shoot', value: ENEMY_DEFS.archer.damage }, [p], () => {
       ctx.attacked = true;
       damagePlayer(s, ENEMY_DEFS.archer.damage, `${enemyName(e)} (arrow)`);
     });
@@ -290,6 +336,11 @@ export function wardenSightLine(s: GameState, e: Enemy): Pos | null {
   return d;
 }
 
+/** Every tile that has a clear straight or diagonal line to the player (any distance). */
+export function sightTiles(s: GameState): Pos[] {
+  return DIRS8.flatMap((d) => ray(s, s.player.pos, d));
+}
+
 function decideWarden(s: GameState, e: Enemy, ctx: TurnCtx): Decision {
   if (e.markedLine) {
     if (e.status.stun > 0) {
@@ -297,7 +348,7 @@ function decideWarden(s: GameState, e: Enemy, ctx: TurnCtx): Decision {
       log(s, 'enemy', `${enemyName(e)} is stunned: its marked line fizzles out.`);
     } else {
       const line = e.markedLine;
-      return act(line, () => {
+      return act({ kind: 'fire', value: RULES.wardenShotDamage }, line, () => {
         e.markedLine = null;
         const hit = line.some((t) => posKey(t) === posKey(s.player.pos));
         if (hit) damagePlayer(s, RULES.wardenShotDamage, `${enemyName(e)}'s telegraphed blast`);
@@ -305,11 +356,11 @@ function decideWarden(s: GameState, e: Enemy, ctx: TurnCtx): Decision {
       });
     }
   }
-  if (e.charge) {
-    const d = wardenSightLine(s, e);
-    if (d) {
+  const d = wardenSightLine(s, e);
+  if (d) {
+    if (e.charge) {
       const line = ray(s, e.pos, d);
-      return act(line, () => {
+      return act({ kind: 'mark', value: RULES.wardenShotDamage }, line, () => {
         e.charge = false;
         e.markedLine = line;
         ctx.endTurn = true;
@@ -320,16 +371,51 @@ function decideWarden(s: GameState, e: Enemy, ctx: TurnCtx): Decision {
         );
       });
     }
+    return stop('has a clear line to you and holds position.', 'watch');
   }
-  return flee(s, e);
+  return approach(s, e, sightTiles(s));
+}
+
+export function redactorOf(s: GameState): Enemy | undefined {
+  return s.enemies.find((x) => x.kind === 'redactor');
+}
+
+export function redactorMarksFull(s: GameState): boolean {
+  const boss = redactorOf(s);
+  return !!boss && (boss.marks ?? 0) >= RULES.redactorMaxMarks;
+}
+
+/**
+ * A Scrap carrying a stolen fragment that reaches any of the 8 tiles around the Redactor
+ * gives it one mark (capped). This is free: it doesn't use an action. The fragment stays on the Scrap.
+ */
+function tryDeliver(s: GameState, e: Enemy, ctx: TurnCtx): void {
+  const boss = redactorOf(s);
+  if (!boss || e.delivered || (e.stolen ?? 0) === 0 || !wardsStanding(s) || chebyshev(e.pos, boss.pos) !== 1) return;
+  e.delivered = true;
+  if ((boss.marks ?? 0) >= RULES.redactorMaxMarks) {
+    log(s, 'enemy', `${enemyName(e)} reaches ${enemyName(boss)}, but its marks are already full (${RULES.redactorMaxMarks}/${RULES.redactorMaxMarks}).`);
+    return;
+  }
+  boss.marks = (boss.marks ?? 0) + 1;
+  ctx.record({ kind: 'deliver' });
+  log(s, 'enemy', `${enemyName(e)} brings its stolen fragment to ${enemyName(boss)}: it gains a mark (${boss.marks}/${RULES.redactorMaxMarks}). The fragment stays on the Scrap.`);
 }
 
 function decideScrap(s: GameState, e: Enemy, ctx: TurnCtx): Decision {
-  if ((e.stolen ?? 0) > 0) return flee(s, e);
   const p = s.player.pos;
-  if (orthAdjacent(e.pos, p) && !ctx.attacked) {
+  if (!wardsStanding(s)) {
+    // Endgame: every Scrap crowds the player to block movement. No stealing.
+    if (orthAdjacent(e.pos, p)) return stop('blocks your path.', 'block');
+    return approach(s, e, neighbors4(s, p));
+  }
+  if (e.delivered) return flee(s, e);
+  const boss = redactorOf(s);
+  if ((e.stolen ?? 0) > 0) return boss ? approach(s, e, neighbors8(s, boss.pos)) : flee(s, e);
+  if (redactorMarksFull(s)) return flee(s, e);
+  if (orthAdjacent(e.pos, p)) {
     if (e.status.stun > 0) return stop('is stunned and can’t steal.');
-    return act([p], () => {
+    return act({ kind: 'steal' }, [p], () => {
       ctx.attacked = true;
       e.stolen = (e.stolen ?? 0) + 1;
       log(s, 'enemy', `${enemyName(e)} touches YOU and steals a fragment: give it one card from your hand (tuck it under its token).`, true);
@@ -342,16 +428,17 @@ export function explosionTiles(s: GameState, e: Enemy): Pos[] {
   return neighbors8(s, e.pos).filter((t) => !isPillar(s, t));
 }
 
-function decideRedactor(s: GameState, e: Enemy): Decision {
+function decideRedactor(s: GameState, e: Enemy, ctx: TurnCtx): Decision {
   const p = s.player.pos;
   if (chebyshev(e.pos, p) === 1) {
     if (e.status.stun > 0) return stop('is stunned and can’t explode.');
     const zone = explosionTiles(s, e);
-    return act(zone, () => {
+    return act({ kind: 'explode', value: RULES.redactorExplodeDamage }, zone, () => {
       log(s, 'enemy', `${enemyName(e)} EXPLODES around ${coordLabel(e.pos)}.`);
       damagePlayer(s, RULES.redactorExplodeDamage, enemyName(e));
-      const keys = new Set(s.redactionZone.map(posKey));
-      for (const t of zone) if (!keys.has(posKey(t))) s.redactionZone.push(t);
+      const keys = new Set(s.erasureZone.map(posKey));
+      for (const t of zone) if (!keys.has(posKey(t))) s.erasureZone.push(t);
+      if (e.mode === 'chaos') ctx.cooldown = true;
     });
   }
   return approach(s, e, neighbors8(s, p));
@@ -363,7 +450,7 @@ export function wardsSpawnOn(turn: number): boolean {
 }
 
 /** End of the enemy turn: each standing Page Ward spawns one Page Scrap next to it. */
-function spawnScraps(s: GameState): void {
+function spawnScraps(s: GameState, recorder: (id: string) => (intent: Intent) => void): void {
   for (const ward of turnOrder(s).filter((e) => e.kind === 'ward')) {
     const open = neighbors4(s, ward.pos).filter((t) => isWalkable(s, t));
     if (open.length === 0) {
@@ -371,6 +458,7 @@ function spawnScraps(s: GameState): void {
       continue;
     }
     const scrap = spawnEnemy(s, 'scrap', pick(s, open));
+    recorder(ward.id)({ kind: 'spawn' });
     log(s, 'enemy', `${enemyName(ward)} spawns ${enemyName(scrap)}: place a 7 token on ${coordLabel(scrap.pos)}.`, true);
   }
 }

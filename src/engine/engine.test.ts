@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  previewIntents,
+  wardenSightLine,
   acknowledgeLoot,
   gmRemoveEnemy,
   actionsNextTurn,
@@ -232,11 +234,24 @@ describe('enemy turn', () => {
 });
 
 describe('warden', () => {
-  it('runs away on its first turn and has no attack', () => {
-    const s = board({ player: 'a1', enemies: [{ kind: 'warden', at: 'a3' }] });
-    const after = runEnemyTurn(s);
-    expect(after.player.hp).toBe(20);
-    expect(after.enemies[0].pos.y).toBeGreaterThan(2);
+  it('walks to a tile with a clear line to you, then holds still (no attack)', () => {
+    const s = board({ player: 'a1', enemies: [{ kind: 'warden', at: 'c4' }] });
+    const plan = planEnemyTurn(toEnemyTurn(s));
+    const w = plan.final.enemies[0];
+    expect(plan.final.player.hp).toBe(20);
+    expect(['c3', 'd4']).toContain(coordLabel(w.pos));
+    expect(wardenSightLine(plan.final, w)).not.toBeNull();
+    expect(plan.intents['5a'].map((i) => i.kind)).toEqual(['move', 'watch']);
+  });
+
+  it('on a charged turn it moves into sight and marks with its second action', () => {
+    let s = board({ player: 'a1', enemies: [{ kind: 'warden', at: 'c4' }] });
+    s.enemies[0].turnCount = 1;
+    const plan = planEnemyTurn(toEnemyTurn(s));
+    expect(plan.intents['5a'].map((i) => i.kind)).toEqual(['move', 'mark']);
+    s = plan.final;
+    expect(s.enemies[0].markedLine?.some((t) => coordLabel(t) === 'a1')).toBe(true);
+    expect(s.player.hp).toBe(20);
   });
 
   it('marking the line ends its turn; the shot fires at the start of its next turn', () => {
@@ -265,12 +280,16 @@ describe('warden', () => {
     expect(s.enemies[0].markedLine).toBeNull();
   });
 
-  it('loses its charge if it never sees the player', () => {
-    let s = board({ player: 'a1', pillars: ['b2'], enemies: [{ kind: 'warden', at: 'e3' }] });
+  it('loses its charge if no tile can see you', () => {
+    // Pillars around a1 block every line to the player, so there is nowhere to go.
+    let s = board({ player: 'a1', pillars: ['a2', 'b1', 'b2'], enemies: [{ kind: 'warden', at: 'e4' }] });
     s.enemies[0].turnCount = 1;
-    s = runEnemyTurn(s);
+    const plan = planEnemyTurn(toEnemyTurn(s));
+    expect(plan.intents['5a'].map((i) => i.kind)).toEqual(['wait']);
+    s = plan.final;
     expect(s.enemies[0].charge).toBe(false);
     expect(s.enemies[0].markedLine).toBeNull();
+    expect(at(s, '5a')).toBe('e4');
   });
 
   it('dying unlocks the exit and drops the potion; exit leads to the next room', () => {
@@ -289,7 +308,7 @@ describe('warden', () => {
 });
 
 describe('boss room', () => {
-  it('wards spawn a scrap every other enemy turn (2, 4, …); redactor shreds and gains a mark every turn', () => {
+  it('wards spawn a scrap every other enemy turn (2, 4, ...); the redactor no longer shreds', () => {
     let s = board({
       size: 8,
       player: 'a1',
@@ -301,24 +320,84 @@ describe('boss room', () => {
     const scraps = () => s.enemies.filter((e) => e.kind === 'scrap').length;
     s = runEnemyTurn(s); // enemy turn 1
     expect(scraps()).toBe(0);
-    expect(s.enemies.find((e) => e.kind === 'redactor')!.marks).toBe(1);
-    expect(s.log.some((l) => l.paper && l.text.includes('shreds'))).toBe(true);
     s = runEnemyTurn(s); // enemy turn 2
     expect(scraps()).toBe(1);
     s = runEnemyTurn(s); // enemy turn 3
     expect(scraps()).toBe(1);
-    expect(s.enemies.find((e) => e.kind === 'redactor')!.marks).toBe(3);
+    expect(s.enemies.find((e) => e.kind === 'redactor')!.marks).toBe(0);
+    expect(s.log.some((l) => l.text.includes('shreds'))).toBe(false);
   });
 
-  it('chaos mode spends a mark for 5 actions and explodes every action in range', () => {
+  it('a scrap steals, carries the fragment to the redactor for a mark, then keeps away', () => {
+    const s = board({
+      size: 8,
+      player: 'a1',
+      enemies: [
+        { kind: 'ward', at: 'h8', element: 'fire' },
+        { kind: 'scrap', at: 'a2' },
+        { kind: 'redactor', at: 'c3' },
+      ],
+    });
+    const plan = planEnemyTurn(toEnemyTurn(s));
+    const scrap = plan.final.enemies.find((e) => e.kind === 'scrap')!;
+    const boss = plan.final.enemies.find((e) => e.kind === 'redactor')!;
+    expect(scrap.stolen).toBe(1);
+    expect(scrap.delivered).toBe(true);
+    expect(boss.marks).toBe(1);
+    const kinds = plan.intents['7a'].map((i) => i.kind);
+    expect(kinds.slice(0, 3)).toEqual(['steal', 'move', 'deliver']);
+    expect(kinds.slice(3).every((k) => k === 'retreat' || k === 'wait')).toBe(true);
+    expect(plan.final.log.some((l) => l.paper && l.text.includes('steals a fragment'))).toBe(true);
+  });
+
+  it('marks cap at 5: scraps stop stealing, and a late delivery adds nothing', () => {
+    const s = board({
+      size: 8,
+      player: 'a1',
+      enemies: [
+        { kind: 'ward', at: 'h8', element: 'fire' },
+        { kind: 'scrap', at: 'a2' },
+        { kind: 'scrap', at: 'f5' },
+        { kind: 'redactor', at: 'e5' },
+      ],
+    });
+    s.enemies.find((e) => e.kind === 'redactor')!.marks = 5;
+    s.enemies.find((e) => e.id === '7b')!.stolen = 1;
+    const after = runEnemyTurn(s);
+    expect(after.enemies.find((e) => e.id === '7a')!.stolen).toBe(0);
+    expect(after.enemies.find((e) => e.id === '7b')!.delivered).toBe(true);
+    expect(after.enemies.find((e) => e.kind === 'redactor')!.marks).toBe(5);
+  });
+
+  it('once the wards fall, scraps run at you and only block (no stealing)', () => {
+    const s = board({ size: 8, player: 'a1', enemies: [{ kind: 'scrap', at: 'a4' }, { kind: 'redactor', at: 'h8' }] });
+    const plan = planEnemyTurn(toEnemyTurn(s));
+    const scrap = plan.final.enemies.find((e) => e.kind === 'scrap')!;
+    expect(coordLabel(scrap.pos)).toBe('a2');
+    expect(scrap.stolen).toBe(0);
+    expect(plan.intents['7a'].map((i) => i.kind)).toEqual(['move', 'move', 'block']);
+  });
+
+  it('chaos mode: 4 actions, and the action after each explosion is a cooldown', () => {
     let s = board({ size: 8, player: 'a1', enemies: [{ kind: 'redactor', at: 'b2' }] });
     s.enemies[0].marks = 2;
-    s = runEnemyTurn(s);
-    const boss = s.enemies[0];
-    expect(boss.mode).toBe('chaos');
-    expect(boss.marks).toBe(1);
-    expect(s.player.hp).toBe(20 - 15);
-    expect(s.redactionZone.length).toBeGreaterThan(0);
+    const plan = planEnemyTurn(toEnemyTurn(s));
+    expect(plan.intents['8a'].map((i) => i.kind)).toEqual(['explode', 'cooldown', 'explode', 'cooldown']);
+    s = plan.final;
+    expect(s.enemies[0].mode).toBe('chaos');
+    expect(s.enemies[0].marks).toBe(1);
+    expect(s.player.hp).toBe(20 - 6);
+    expect(s.erasureZone.length).toBeGreaterThan(0);
+  });
+
+  it('the chaos cooldown resets each turn', () => {
+    const s = board({ size: 8, player: 'a1', enemies: [{ kind: 'redactor', at: 'c2' }] });
+    s.enemies[0].marks = 3;
+    let plan = planEnemyTurn(toEnemyTurn(s));
+    expect(plan.intents['8a'].map((i) => i.kind)).toEqual(['move', 'explode', 'cooldown', 'explode']);
+    plan = planEnemyTurn(toEnemyTurn(plan.final));
+    expect(plan.intents['8a'][0].kind).toBe('explode');
+    expect(plan.final.player.hp).toBe(20 - 12);
   });
 
   it('with no marks left the redactor has 3 actions', () => {
@@ -328,19 +407,12 @@ describe('boss room', () => {
     expect(s.player.hp).toBe(20 - 9);
   });
 
-  it('ending your turn in the redaction zone costs a fragment, then the zone fades', () => {
+  it('ending your turn in the Erasure zone costs a fragment, then the zone fades', () => {
     let s = board({ size: 8, player: 'a1', enemies: [{ kind: 'redactor', at: 'h8' }] });
-    s.redactionZone = [parseCoord('a1')];
+    s.erasureZone = [parseCoord('a1')];
     s = endPlayerTurn(s);
-    expect(s.redactionZone).toHaveLength(0);
-    expect(s.log.some((l) => l.paper && l.text.includes('permanently remove'))).toBe(true);
-  });
-
-  it('scrap steals a fragment then flees', () => {
-    const s = board({ size: 8, player: 'a1', enemies: [{ kind: 'scrap', at: 'a2' }] });
-    const after = runEnemyTurn(s);
-    expect(after.enemies[0].stolen).toBe(1);
-    expect(after.enemies[0].pos.y).toBeGreaterThan(1);
+    expect(s.erasureZone).toHaveLength(0);
+    expect(s.log.some((l) => l.paper && l.text.includes('Erasure zone'))).toBe(true);
   });
 });
 
@@ -379,7 +451,8 @@ describe('loot popup', () => {
     let s = board({ size: 8, player: 'a1', enemies: [{ kind: 'scrap', at: 'h8' }, { kind: 'rat', at: 'h1' }] });
     s.enemies[0].stolen = 2;
     s = gmRemoveEnemy(s, '7a', true);
-    expect(s.pendingLoot[0].discard).toEqual(['The 2 fragments it stole']);
+    expect(s.pendingLoot[0].toHand).toEqual(['The 2 fragments it stole']);
+    expect(s.pendingLoot[0].discard).toEqual([]);
     s = gmRemoveEnemy(acknowledgeLoot(s), '1a', false);
     expect(s.pendingLoot).toEqual([]);
   });
@@ -392,7 +465,7 @@ describe('turn previews (used by the hover card)', () => {
     expect(actionsNextTurn(s, boss())).toBe(2);
     s.enemies = s.enemies.filter((e) => e.kind !== 'ward');
     boss().marks = 1;
-    expect(actionsNextTurn(s, boss())).toBe(5);
+    expect(actionsNextTurn(s, boss())).toBe(4);
     boss().marks = 0;
     expect(actionsNextTurn(s, boss())).toBe(3);
   });
@@ -404,6 +477,32 @@ describe('turn previews (used by the hover card)', () => {
     expect(wardenChargedNextTurn(s.enemies[0])).toBe(true);
     const plan = planEnemyTurn(endPlayerTurn(s));
     expect(plan.steps.some((st) => st.entries.some((l) => l.text.includes('gains a telegraph charge')))).toBe(true);
+  });
+});
+
+describe('intents', () => {
+  it('the preview matches what the enemies actually do', () => {
+    const s = createGame(7);
+    expect(previewIntents(s)).toEqual(planEnemyTurn(endPlayerTurn(s)).intents);
+  });
+
+  it('an archer that needs one step shows move, then shoot for 2', () => {
+    const s = board({ player: 'a1', enemies: [{ kind: 'archer', at: 'b5' }] });
+    expect(previewIntents(s)['2a']).toEqual([{ kind: 'move' }, { kind: 'shoot', value: 2 }]);
+  });
+
+  it('is recalculated after the player acts', () => {
+    let s = board({ player: 'a1', enemies: [{ kind: 'rat', at: 'd1' }] });
+    expect(previewIntents(s)['1a'].map((i) => i.kind)).toEqual(['move', 'move', 'attack']);
+    s = playerMove(s, 'up');
+    expect(previewIntents(s)['1a'].map((i) => i.kind)).toEqual(['move', 'move', 'move']);
+  });
+
+  it('wards show a spawn intent only on spawn turns', () => {
+    const s = board({ size: 8, player: 'a1', enemies: [{ kind: 'ward', at: 'h8', element: 'fire' }] });
+    expect(previewIntents(s)['6a']).toBeUndefined();
+    s.turn = 2;
+    expect(previewIntents(s)['6a']).toEqual([{ kind: 'spawn' }]);
   });
 });
 

@@ -64,8 +64,8 @@ export function killEnemy(state: GameState, e: Enemy): void {
   state.enemies = state.enemies.filter((x) => x.id !== e.id);
   log(state, 'system', `${enemyName(e)} is defeated at ${coordLabel(e.pos)}. Remove its token.`, true);
 
-  const notice = (discard: string[], extras: string[] = []) =>
-    state.pendingLoot.push({ enemyId: e.id, enemyKind: e.kind, enemyName: enemyName(e), discard, extras });
+  const notice = (discard: string[], extras: string[] = [], toHand: string[] = []) =>
+    state.pendingLoot.push({ enemyId: e.id, enemyKind: e.kind, enemyName: enemyName(e), discard, toHand, extras });
 
   switch (e.kind) {
     case 'rat':
@@ -91,8 +91,8 @@ export function killEnemy(state: GameState, e: Enemy): void {
     }
     case 'scrap':
       if (e.stolen) {
-        log(state, 'system', `The scrap drops ${e.stolen} stolen fragment(s): put them in your discard pile.`, true);
-        notice([`${e.stolen === 1 ? 'The fragment' : `The ${e.stolen} fragments`} it stole`]);
+        log(state, 'system', `The scrap drops ${e.stolen} stolen fragment(s): put them back in your hand.`, true);
+        notice([], [], [`${e.stolen === 1 ? 'The fragment' : `The ${e.stolen} fragments`} it stole`]);
       }
       break;
     case 'redactor':

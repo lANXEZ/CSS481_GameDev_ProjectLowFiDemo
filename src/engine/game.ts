@@ -44,7 +44,7 @@ export function createGame(seed: number = Date.now()): GameState {
     phase: 'player',
     actionsLeft: RULES.actionsPerTurn,
     playerActed: false,
-    redactionZone: [],
+    erasureZone: [],
     typeCounters: {},
     nextDeployId: 1,
     rng: seed | 0,
@@ -81,7 +81,7 @@ export function loadRoom(state: GameState, index: number): void {
   state.phase = 'player';
   state.actionsLeft = RULES.actionsPerTurn;
   state.playerActed = false;
-  state.redactionZone = [];
+  state.erasureZone = [];
   for (const spawn of def.enemies) spawnEnemy(state, spawn.kind, parseCoord(spawn.at), spawn.element);
 
   log(state, 'system', `Room ${index + 1}: ${def.name}. Mana resets to ${RULES.roomStartMana}.`);
@@ -269,12 +269,12 @@ export function endPlayerTurn(state: GameState): GameState {
 
 function endTurnInPlace(s: GameState): void {
   if (s.actionsLeft > 0) log(s, 'player', `End turn (${s.actionsLeft} action${s.actionsLeft === 1 ? '' : 's'} unused).`);
-  if (s.redactionZone.length > 0) {
-    if (s.redactionZone.some((p) => samePos(p, s.player.pos))) {
-      log(s, 'system', 'YOU ended your turn inside the redaction zone: permanently remove one fragment from your hand (out of the game).', true);
+  if (s.erasureZone.length > 0) {
+    if (s.erasureZone.some((p) => samePos(p, s.player.pos))) {
+      log(s, 'system', 'YOU ended your turn inside the Erasure zone: permanently remove one fragment from your hand (out of the game).', true);
     }
-    s.redactionZone = [];
-    log(s, 'system', 'The redaction zone fades.');
+    s.erasureZone = [];
+    log(s, 'system', 'The Erasure zone fades.');
   }
   const st = s.player.status;
   if (!s.playerActed && st.burn > 0) {
