@@ -246,7 +246,7 @@ export function playerDrinkPotion(state: GameState): GameState {
   if (state.player.potions <= 0) throw new RuleError('You have no potion.');
   return playerAction(state, (s) => {
     const before = s.player.hp;
-    s.player.hp = Math.min(s.player.maxHp, before + RULES.potionHeal);
+    s.player.hp = s.player.maxHp; // the Heal Potion restores full HP
     s.player.potions -= 1;
     log(s, 'player', `Drink the Heal Potion: HP ${before} → ${s.player.hp}.`);
     log(s, 'player', 'Discard the Heal Potion card.', true);

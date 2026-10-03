@@ -14,6 +14,7 @@ import {
   planEnemyTurn,
   playerCast,
   playerMeditate,
+  playerDrinkPotion,
   playerMove,
   playerUnstableFire,
   spawnEnemy,
@@ -290,6 +291,17 @@ describe('warden', () => {
     expect(s.enemies[0].charge).toBe(false);
     expect(s.enemies[0].markedLine).toBeNull();
     expect(at(s, '5a')).toBe('e4');
+  });
+
+  it('the heal potion restores full HP (after any burn tick)', () => {
+    let s = board({ player: 'a1' });
+    s.player.potions = 1;
+    s.player.hp = 3;
+    s.player.status.burn = 2;
+    s = playerDrinkPotion(s);
+    expect(s.player.hp).toBe(20);
+    expect(s.player.potions).toBe(0);
+    expect(s.actionsLeft).toBe(2);
   });
 
   it('dying unlocks the exit and drops the potion; exit leads to the next room', () => {

@@ -44,7 +44,7 @@ team has agreed since. If this file and the PDF disagree, this file is the curre
 | Cast | Combine 2–3 fragments; costs mana (see [Spells](#spells)). |
 | Unstable Fire | Fire ×3, see [Spells](#spells). |
 | Meditate | +3 mana (max 6). |
-| Drink potion | **+10 HP** (max 20). Only if you carry the Heal Potion. It carries between rooms. |
+| Drink potion | **Restores full HP** (back to 20). Only if you carry the Heal Potion. It carries between rooms. |
 | Reroll | Discard your whole hand and draw 5. Done on the table; the app only logs it. |
 
 - **Burn on you:** if you're burning, you take 1 damage right before each of your actions.

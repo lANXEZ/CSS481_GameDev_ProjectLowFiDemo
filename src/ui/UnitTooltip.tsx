@@ -196,7 +196,7 @@ function PlayerInfo({ state }: { state: GameState }) {
         <dt>Actions</dt>
         <dd>{state.phase === 'player' ? `${state.actionsLeft} of ${RULES.actionsPerTurn} left this turn` : `${RULES.actionsPerTurn} per turn`}</dd>
         <dt>Potion</dt>
-        <dd>{p.potions ? `${p.potions} (+${RULES.potionHeal} HP each)` : 'None'}</dd>
+        <dd>{p.potions ? `${p.potions} (restores full HP)` : 'None'}</dd>
         <dt>Unstable Fire</dt>
         <dd>{p.unstableUsed ? 'Used in this room' : 'Ready'}</dd>
       </dl>

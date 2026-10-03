@@ -165,7 +165,7 @@ export function ActionPanel(props: Props) {
           Meditate (+{RULES.meditateMana} mana)
         </button>
         <button className="btn" onClick={props.onPotion} disabled={p.potions <= 0}>
-          Drink potion (+{RULES.potionHeal} HP)
+          Drink potion (full HP)
         </button>
         <button className="btn" onClick={props.onReroll}>
           Reroll hand

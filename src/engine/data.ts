@@ -9,7 +9,6 @@ export const RULES = {
   roomStartMana: 3,
   actionsPerTurn: 3,
   meditateMana: 3,
-  potionHeal: 10,
   handSize: 5,
 
   burnTicks: 3,
