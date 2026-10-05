@@ -130,7 +130,7 @@ p {
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(420px, 740px) 376px minmax(300px, 1fr);
+  grid-template-columns: var(--board-col, minmax(420px, 740px)) 376px var(--log-col, minmax(300px, 1fr));
   gap: 22px;
   padding: 20px 24px 32px;
   align-items: start;
@@ -1748,4 +1748,178 @@ select {
 
 .mode-simulation .hand {
   max-width: 600px;
+}
+
+/* ---------------------------------------------------------------- resizable log column */
+
+/* The handle is the log column's first child; the column is pulled left into the gap so the handle sits there. */
+.log-col {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0;
+}
+
+.log-col > .log {
+  flex: 1;
+  min-width: 0;
+}
+
+.col-resizer {
+  flex: none;
+  align-self: stretch;
+  width: 16px;
+  margin-left: -16px;
+  margin-right: 0;
+  cursor: col-resize;
+  touch-action: none;
+  position: relative;
+}
+
+/* a thin rule, gold while hovered, focused or dragged */
+.col-resizer::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 6px;
+  width: 4px;
+  border-radius: 2px;
+  background: transparent;
+  transition: background 120ms;
+}
+
+.col-resizer:hover::after,
+.col-resizer:focus-visible::after,
+.col-resizer.is-dragging::after {
+  background: var(--gilt);
+}
+
+.col-resizer:focus-visible {
+  outline: none;
+}
+
+body.is-col-resizing,
+body.is-col-resizing * {
+  cursor: col-resize !important;
+  user-select: none;
+}
+
+@media (min-width: 1321px) {
+  .log-col {
+    margin-left: -16px;
+    padding-left: 16px;
+  }
+}
+
+/* Below 1320px the log sits under the action rail: nothing to resize. */
+@media (max-width: 1320px) {
+  .col-resizer {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------- pile viewer (Simulation mode) */
+
+/* the pile thumbnails are buttons that open the viewer */
+.pile-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.pile-card {
+  display: block;
+  transition: transform 140ms ease-out;
+}
+
+.pile-btn:hover .pile-card,
+.pile-btn:focus-visible .pile-card {
+  transform: translateY(-3px);
+}
+
+.pile-btn:hover .pile-label,
+.pile-btn:focus-visible .pile-label {
+  color: var(--gilt);
+}
+
+.pile-backdrop {
+  background: rgba(10, 12, 20, 0.86);
+}
+
+.pile-modal {
+  width: min(1080px, 100%);
+  max-height: calc(100vh - 32px);
+  padding: 22px 24px 24px;
+}
+
+.pile-modal-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.pile-modal-head h2 {
+  font-size: 1.6rem;
+}
+
+.pile-modal-count {
+  color: var(--gilt);
+}
+
+.pile-modal-counts {
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.pile-modal-empty {
+  color: var(--muted);
+  text-align: center;
+  padding: 48px 0;
+}
+
+.pile-grid {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 6px 4px 4px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 16px;
+  overflow-y: auto;
+  min-height: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+.pile-grid img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+  transition: transform 140ms ease-out;
+}
+
+.pile-grid li:hover img {
+  transform: translateY(-4px) scale(1.03);
+}
+
+.pile-grid.is-erased img {
+  filter: grayscale(1) brightness(0.7);
+}
+
+@media (max-width: 560px) {
+  .pile-grid {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pile-card,
+  .pile-grid img {
+    transition: none;
+  }
 }

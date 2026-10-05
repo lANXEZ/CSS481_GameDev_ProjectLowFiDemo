@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   ENEMY_DEFS,
   ROOMS,
@@ -30,6 +30,7 @@ import {
 } from '../engine';
 import { ActionPanel } from './ActionPanel';
 import { Board, type BoardHighlights } from './Board';
+import { ColumnResizer, useLogWidth } from './ColumnResizer';
 import { EnemyTurnPanel } from './EnemyTurnPanel';
 import { HandPanel } from './HandPanel';
 import { Inspector, type PlaceMode } from './Inspector';
@@ -89,6 +90,9 @@ function ModeToggle({ mode, onChange }: { mode: GameMode; onChange: (m: GameMode
 
 function Game({ mode, onModeChange }: { mode: GameMode; onModeChange: (m: GameMode) => void }) {
   const game = useGame(mode);
+  const layoutRef = useRef<HTMLElement>(null);
+  const logColRef = useRef<HTMLDivElement>(null);
+  const [logWidth, setLogWidth] = useLogWidth();
   const { state, run } = game;
   const sim = mode === 'simulation';
 
@@ -188,7 +192,8 @@ function Game({ mode, onModeChange }: { mode: GameMode; onModeChange: (m: GameMo
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
         e.preventDefault();
         game.redo();
-      } else if (e.key === 'Escape') {
+      } else if (e.key === 'Escape' && !document.querySelector('.modal-backdrop')) {
+        // With a popup open, Escape belongs to the popup (e.g. closing the pile viewer keeps your picked cards).
         setPlaceMode(null);
         setSelectedId(null);
         setPickedCards([]);
@@ -247,7 +252,12 @@ function Game({ mode, onModeChange }: { mode: GameMode; onModeChange: (m: GameMo
         </div>
       )}
 
-      <main className="layout">
+      <main
+        className="layout"
+        ref={layoutRef}
+        // A dragged log width: the log column gets it (shrinking if the window is too narrow), the board column the rest.
+        style={logWidth ? ({ '--log-col': `minmax(260px, ${logWidth}px)`, '--board-col': 'minmax(420px, 1fr)' } as CSSProperties) : undefined}
+      >
         <div className="board-col">
           <div className="room-title">
             <h2>{state.room.name}</h2>
@@ -339,7 +349,8 @@ function Game({ mode, onModeChange }: { mode: GameMode; onModeChange: (m: GameMo
             />
           </div>
 
-          <div className="log-col">
+          <div className="log-col" ref={logColRef}>
+            <ColumnResizer columnRef={logColRef} layoutRef={layoutRef} width={logWidth} onChange={setLogWidth} />
             <LogPanel state={state} />
           </div>
         </div>

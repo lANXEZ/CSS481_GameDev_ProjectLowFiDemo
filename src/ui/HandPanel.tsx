@@ -1,5 +1,7 @@
-import { RULES, cardsLabel, fragmentName, spellCost, spellName, type CardCombo, type GameState } from '../engine';
+import { useCallback, useState } from 'react';
+import { RULES, fragmentName, spellCost, spellName, type CardCombo, type GameState } from '../engine';
 import { CARD_BACK_ART, POTION_CARD_ART, cardArt } from './art';
+import { PileViewer, type PileKind } from './PileViewer';
 
 interface Props {
   state: GameState;
@@ -14,6 +16,8 @@ interface Props {
 
 /** Simulation mode: your deck, discard pile and hand, drawn with the printed cards. Pick 2–3 cards to craft. */
 export function HandPanel({ state, selected, onToggle, onClear, combo, interactive }: Props) {
+  const [viewing, setViewing] = useState<PileKind | null>(null);
+  const closeViewer = useCallback(() => setViewing(null), []);
   const cards = state.cards;
   if (!cards) return null;
   const topDiscard = cards.discard[cards.discard.length - 1];
@@ -53,32 +57,49 @@ export function HandPanel({ state, selected, onToggle, onClear, combo, interacti
         </div>
 
         <div className="piles">
-          <Pile label="Deck" count={cards.deck.length} art={cards.deck.length ? CARD_BACK_ART : null} title={`${cards.deck.length} cards to draw. When it runs out, the discard pile is shuffled into a new deck.`} />
-          <Pile
-            label="Discard"
-            count={cards.discard.length}
-            art={topDiscard ? cardArt(topDiscard) : null}
-            title={cards.discard.length ? `Discard pile: ${cardsLabel(cards.discard)}` : 'Discard pile: empty'}
-          />
+          <Pile label="Deck" count={cards.deck.length} art={cards.deck.length ? CARD_BACK_ART : null} onOpen={() => setViewing('deck')} />
+          <Pile label="Discard" count={cards.discard.length} art={topDiscard ? cardArt(topDiscard) : null} onOpen={() => setViewing('discard')} />
           {cards.erased.length > 0 && (
-            <Pile label="Erased" count={cards.erased.length} art={cardArt(cards.erased[cards.erased.length - 1])} title={`Erased for good: ${cardsLabel(cards.erased)}`} erased />
+            <Pile label="Erased" count={cards.erased.length} art={cardArt(cards.erased[cards.erased.length - 1])} onOpen={() => setViewing('erased')} erased />
           )}
           {state.player.potions > 0 && (
             <Pile label="Potion" count={state.player.potions} art={POTION_CARD_ART} title="Max Potion: drink it (1 action) to restore full HP." />
           )}
         </div>
       </div>
+
+      {viewing && <PileViewer pile={viewing} cards={cards[viewing]} onClose={closeViewer} />}
     </section>
   );
 }
 
-function Pile({ label, count, art, title, erased = false }: { label: string; count: number; art: string | null; title: string; erased?: boolean }) {
-  return (
-    <div className={`pile${erased ? ' pile-erased' : ''}`} title={title}>
-      <div className="pile-card">{art ? <img src={art} alt="" draggable={false} /> : <span className="pile-empty" />}</div>
+interface PileProps {
+  label: string;
+  count: number;
+  art: string | null;
+  /** Click to see every card in the pile. Piles without it (the potion) are just a picture. */
+  onOpen?: () => void;
+  title?: string;
+  erased?: boolean;
+}
+
+function Pile({ label, count, art, onOpen, title, erased = false }: PileProps) {
+  const body = (
+    <>
+      <span className="pile-card">{art ? <img src={art} alt="" draggable={false} /> : <span className="pile-empty" />}</span>
       <span className="pile-label">
         {label} <strong>{count}</strong>
       </span>
+    </>
+  );
+  const cls = `pile${erased ? ' pile-erased' : ''}`;
+  return onOpen ? (
+    <button className={`${cls} pile-btn`} onClick={onOpen} title={`See the ${count} card${count === 1 ? '' : 's'} in this pile`} aria-label={`${label}: ${count} cards. Show them all`}>
+      {body}
+    </button>
+  ) : (
+    <div className={cls} title={title}>
+      {body}
     </div>
   );
 }
