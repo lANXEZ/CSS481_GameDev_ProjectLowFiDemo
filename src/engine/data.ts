@@ -139,12 +139,13 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
     typeNum: 6,
     name: 'Page Ward',
     hp: 4,
-    actions: 0,
+    /** On summon turns only (2, 4, 6…); it rests with no action in between. */
+    actions: 1,
     attack: 'none',
     damage: 0,
     attackText: 'None. Does not attack.',
-    notes: 'Immune to spells without its attuned element. Spawns 1 Page Scrap at the end of every other enemy turn.',
-    behavior: 'Never moves or attacks. At the end of every other enemy turn (2nd, 4th, 6th…) it spawns a Page Scrap on a free tile next to it. While any Ward stands, the Redactor is immune.',
+    notes: 'Immune to spells without its attuned element. Its 1 action, every other enemy turn, summons a Page Scrap.',
+    behavior: 'Never moves or attacks. On every other enemy turn (2nd, 4th, 6th…) it spends its 1 action summoning a Page Scrap on a free tile next to it (Burn ticks before it, like any action); in between it rests. While any Ward stands, the Redactor is immune.',
     drop: null,
   },
   scrap: {

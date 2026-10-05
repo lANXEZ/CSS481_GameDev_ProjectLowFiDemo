@@ -105,8 +105,8 @@ function situation(state: GameState, e: Enemy): string[] {
       lines.push(`Only ${e.element} spells hurt it.`);
       lines.push(
         wardsSpawnOn(state.turn)
-          ? `Spawns a Page Scrap at the end of enemy turn ${state.turn}.`
-          : `No Page Scrap after enemy turn ${state.turn}; the next one comes after turn ${state.turn + 1}.`,
+          ? `Summons a Page Scrap on enemy turn ${state.turn} (its 1 action${e.status.burn > 0 ? ': Burn ticks first' : ''}).`
+          : `Rests on enemy turn ${state.turn}${e.status.burn > 0 ? ' (no action, so its Burn wears off)' : ''}; it summons again on turn ${state.turn + 1}.`,
       );
       break;
     case 'scrap': {

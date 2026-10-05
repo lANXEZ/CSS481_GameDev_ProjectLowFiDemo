@@ -79,8 +79,9 @@ export function planEnemyTurn(state: GameState, opts: { snapshots?: boolean } = 
   }
 
   if (s.phase === 'enemy') {
-    if (wardsSpawnOn(s.turn)) spawnScraps(s, recorder);
-    else if (s.enemies.some((e) => e.kind === 'ward')) log(s, 'enemy', 'The Page Wards gather ink: no Page Scrap this turn.');
+    if (!wardsSpawnOn(s.turn) && s.enemies.some((e) => e.kind === 'ward')) {
+      log(s, 'enemy', 'The Page Wards rest and gather ink: no Page Scrap this turn.');
+    }
     emit(null);
     s.turn += 1;
     s.phase = 'player';
@@ -189,6 +190,7 @@ function runUnitTurn(
 
 /** Actions the unit will get on its next turn. Pure: mirrors startUnitTurn without spending marks. */
 export function actionsNextTurn(s: GameState, e: Enemy): number {
+  if (e.kind === 'ward') return wardsSpawnOn(s.turn) ? ENEMY_DEFS.ward.actions : 0;
   if (e.kind !== 'redactor') return ENEMY_DEFS[e.kind].actions;
   if (wardsStanding(s)) return RULES.redactorActions.guarded;
   return (e.marks ?? 0) > 0 ? RULES.redactorActions.chaos : RULES.redactorActions.spent;
@@ -201,6 +203,8 @@ export function wardenChargedNextTurn(e: Enemy): boolean {
 
 /** Start-of-turn bookkeeping. Returns the number of actions the unit gets this turn. */
 function startUnitTurn(s: GameState, e: Enemy): number {
+  // A Page Ward's one action is its summon, on enemy turns 2, 4, 6…; it rests (no action) in between.
+  if (e.kind === 'ward') return wardsSpawnOn(s.turn) ? ENEMY_DEFS.ward.actions : 0;
   if (e.kind === 'warden') {
     const charged = wardenChargedNextTurn(e);
     e.turnCount = (e.turnCount ?? 0) + 1;
@@ -278,7 +282,7 @@ function decide(s: GameState, e: Enemy, ctx: TurnCtx): Decision {
     case 'redactor':
       return decideRedactor(s, e, ctx);
     case 'ward':
-      return stop();
+      return decideWard(s, e, ctx);
   }
 }
 
@@ -473,17 +477,20 @@ export function wardsSpawnOn(turn: number): boolean {
   return turn % RULES.wardSpawnEvery === 0;
 }
 
-/** End of the enemy turn: each standing Page Ward spawns one Page Scrap next to it. */
-function spawnScraps(s: GameState, recorder: (id: string) => (intent: Intent) => void): void {
-  for (const ward of turnOrder(s).filter((e) => e.kind === 'ward')) {
-    const open = neighbors4(s, ward.pos).filter((t) => isWalkable(s, t));
-    if (open.length === 0) {
-      log(s, 'enemy', `${enemyName(ward)} has no room to spawn a Page Scrap.`);
-      continue;
-    }
-    const scrap = spawnEnemy(s, 'scrap', pick(s, open));
-    recorder(ward.id)({ kind: 'spawn' });
-    const spawned = `${enemyName(ward)} spawns ${enemyName(scrap)}`;
+/**
+ * Page Ward: its one action (on summon turns) is a Page Scrap on a random free tile next to it.
+ * Being an action, Burn ticks right before it, and a Ward the tick kills summons nothing.
+ * It isn't an attack, so Stun doesn't stop it. The new Scrap acts from the next enemy turn
+ * (turn order is fixed when the enemy turn starts).
+ */
+function decideWard(s: GameState, e: Enemy, ctx: TurnCtx): Decision {
+  if (ctx.acted) return stop();
+  const open = neighbors4(s, e.pos).filter((t) => isWalkable(s, t));
+  if (open.length === 0) return stop('has no room to summon a Page Scrap.');
+  const at = pick(s, open);
+  return act({ kind: 'spawn' }, [at], () => {
+    const scrap = spawnEnemy(s, 'scrap', at);
+    const spawned = `${enemyName(e)} summons ${enemyName(scrap)}`;
     tableLog(s, 'enemy', `${spawned}: place a 7 token on ${coordLabel(scrap.pos)}.`, `${spawned} on ${coordLabel(scrap.pos)}.`);
-  }
+  });
 }

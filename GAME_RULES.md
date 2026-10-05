@@ -113,7 +113,7 @@ A cast is exactly **one element + one shape**, 2–3 fragments in total, and eit
 | 3 | Brute | 6 | 2 | 3 dmg, adjacent | Rock fragment |
 | 4 | Leech | 4 | 2 | Drains 1 mana, adjacent | Water fragment |
 | 5 | Warden | 8 | 2 | Telegraphed 5 dmg line | Max Potion + unlocks the exit |
-| 6 | Page Ward | 4 | 0 | None | Nothing |
+| 6 | Page Ward | 4 | 1 (summon turns only) | None | Nothing |
 | 7 | Page Scrap | 1 | **4** | Steals a fragment | Its stolen fragments go **back to your hand** |
 | 8 | The Redactor | 18 | 2 / **4** / 3 | 3 dmg to all 8 tiles around it | Nothing; beating it wins |
 
@@ -147,8 +147,13 @@ It has no normal attack. Each action, it checks these in order:
 
 ### Page Ward
 - **Never moves or attacks.** Only spells of its own element (Fire, Water or Rock) hurt it.
-- **Spawning:** at the end of enemy turns 2, 4, 6… each standing Ward spawns one Page Scrap on a random free tile next
-  to it. If there's no free tile, it skips that spawn.
+- **Summoning is its action:** on enemy turns 2, 4, 6… each standing Ward spends its 1 action on its own turn
+  summoning one Page Scrap on a random free tile next to it. If there's no free tile, it does nothing that turn.
+  In between it rests (no action).
+- **Statuses:** being an action, the summon is preceded by a Burn tick like any other, so a burning Ward takes 1 damage
+  first, and if that kills it, no Scrap comes. On a rest turn it takes no action, so its Burn wears off (see
+  [Burn and inaction](#statuses)). Stun doesn't stop a summon, because it isn't an attack.
+- **New Scraps** start acting on the next enemy turn.
 - **While any Ward stands,** the Redactor is immune.
 
 ### Page Scrap
@@ -265,5 +270,5 @@ Repeated actions are merged into one chip, and damage values are written on the 
 | Tan shield | Page Scrap blocks your path |
 | Orange burst | Redactor explodes, with damage |
 | Grey hourglass | Redactor cooldown |
-| Purple ⊕ | Page Ward spawns a Page Scrap at the end of the enemy turn |
+| Purple ⊕ | Page Ward summons a Page Scrap (its action this turn) |
 | Grey pause ‖ | Does nothing (rooted, cornered or blocked) |

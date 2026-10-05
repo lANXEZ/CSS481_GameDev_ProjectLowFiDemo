@@ -57,7 +57,7 @@ export const INTENT_INFO: Record<IntentKind, IntentInfo> = {
   block: { color: '#b39a72', describe: () => 'Blocks your path' },
   explode: { color: '#ff6a3d', showsValue: true, describe: (n, v) => `Explodes for ${v}${times(n)}` },
   cooldown: { color: '#a3a9b8', describe: (n) => `Cools down${times(n)}` },
-  spawn: { color: '#b98fe6', describe: () => 'Spawns a Page Scrap at the end of the enemy turn' },
+  spawn: { color: '#b98fe6', describe: () => 'Summons a Page Scrap next to it (its 1 action)' },
   wait: { color: '#a3a9b8', describe: () => 'Does nothing' },
 };
 

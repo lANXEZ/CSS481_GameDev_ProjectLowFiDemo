@@ -320,6 +320,41 @@ describe('warden', () => {
 });
 
 describe('boss room', () => {
+  const wardRoom = (status: Partial<{ burn: number; root: number; stun: number }>, turn: number) => {
+    const s = board({ size: 8, player: 'a1', enemies: [{ kind: 'ward', at: 'h8', element: 'fire' }, { kind: 'redactor', at: 'h1' }] });
+    Object.assign(s.enemies[0].status, status);
+    s.turn = turn;
+    return s;
+  };
+  const scrapCount = (s: GameState) => s.enemies.filter((e) => e.kind === 'scrap').length;
+
+  it('summoning is the ward’s action, so Burn ticks right before it', () => {
+    const plan = planEnemyTurn(toEnemyTurn(wardRoom({ burn: 3 }, 2)));
+    expect(hp(plan.final, '6a')).toBe(3);
+    expect(plan.final.enemies[0].status.burn).toBe(2);
+    expect(scrapCount(plan.final)).toBe(1);
+    expect(plan.intents['6a']).toEqual([{ kind: 'spawn' }]);
+  });
+
+  it('a ward the Burn tick kills summons nothing', () => {
+    const s = wardRoom({ burn: 2 }, 2);
+    s.enemies[0].hp = 1;
+    const after = runEnemyTurn(s);
+    expect(after.enemies.some((e) => e.kind === 'ward')).toBe(false);
+    expect(scrapCount(after)).toBe(0);
+  });
+
+  it('stun doesn’t stop a summon (it isn’t an attack)', () => {
+    expect(scrapCount(runEnemyTurn(wardRoom({ stun: 1 }, 2)))).toBe(1);
+  });
+
+  it('on a rest turn the ward takes no action, so its Burn wears off', () => {
+    const after = runEnemyTurn(wardRoom({ burn: 3 }, 1));
+    expect(hp(after, '6a')).toBe(4);
+    expect(after.enemies[0].status.burn).toBe(0);
+    expect(scrapCount(after)).toBe(0);
+  });
+
   it('wards spawn a scrap every other enemy turn (2, 4, ...); the redactor no longer shreds', () => {
     let s = board({
       size: 8,
