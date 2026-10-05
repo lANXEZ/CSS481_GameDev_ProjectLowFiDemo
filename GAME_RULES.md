@@ -1,13 +1,14 @@
 # Broken Grimoire: how everything works
 
-This is the complete rulebook **as the board tracker implements it**: the demo kit PDF plus every change the
-team has agreed since. If this file and the PDF disagree, this file is the current rule.
+This is the complete rulebook **as the app implements it** (both the board tracker and the full simulation): the demo
+kit PDF plus every change the team has agreed since. If this file and the PDF disagree, this file is the current rule.
 
 - Every number here lives in `src/engine/data.ts` (`RULES`, `ENEMY_DEFS`, `ROOMS`), so balance changes are data edits.
 - Rules marked *(default)* were judgement calls made while building the app, not team decisions. They're easy to change.
 
 **Contents:** [Turns](#turns) · [The wizard](#the-wizard-player) · [Spells](#spells) · [Statuses](#statuses) ·
-[Enemies](#enemies) · [The board](#the-board) · [Rooms](#rooms) · [Loot](#loot) · [Intentions](#intentions-what-enemies-will-do)
+[Enemies](#enemies) · [The board](#the-board) · [Rooms](#rooms) · [Loot](#loot) · [Cards](#cards-simulation-mode) ·
+[Intentions](#intentions-what-enemies-will-do)
 
 ---
 
@@ -44,8 +45,8 @@ team has agreed since. If this file and the PDF disagree, this file is the curre
 | Cast | Combine 2–3 fragments; costs mana (see [Spells](#spells)). |
 | Unstable Fire | Fire ×3, see [Spells](#spells). |
 | Meditate | +3 mana (max 6). |
-| Drink potion | **Restores full HP** (back to 20). Only if you carry the Heal Potion. It carries between rooms. |
-| Reroll | Discard your whole hand and draw 5. Done on the table; the app only logs it. |
+| Drink potion | **Restores full HP** (back to 20). Only if you carry the Max Potion. It carries between rooms. |
+| Reroll | Choose any of the cards in your hand (at least one), discard them, and draw that many from the deck. In Tracker mode it's done on the table and the app only logs it. |
 
 - **Burn on you:** if you're burning, you take 1 damage right before each of your actions.
 - **End of your turn:**
@@ -111,7 +112,7 @@ A cast is exactly **one element + one shape**, 2–3 fragments in total, and eit
 | 2 | Archer | 3 | 2 | 2 dmg, range 4, straight or diagonal | Beam fragment |
 | 3 | Brute | 6 | 2 | 3 dmg, adjacent | Rock fragment |
 | 4 | Leech | 4 | 2 | Drains 1 mana, adjacent | Water fragment |
-| 5 | Warden | 8 | 2 | Telegraphed 5 dmg line | Heal Potion + unlocks the exit |
+| 5 | Warden | 8 | 2 | Telegraphed 5 dmg line | Max Potion + unlocks the exit |
 | 6 | Page Ward | 4 | 0 | None | Nothing |
 | 7 | Page Scrap | 1 | **4** | Steals a fragment | Its stolen fragments go **back to your hand** |
 | 8 | The Redactor | 18 | 2 / **4** / 3 | 3 dmg to all 8 tiles around it | Nothing; beating it wins |
@@ -142,7 +143,7 @@ It has no normal attack. Each action, it checks these in order:
 - **The shot** always comes on the first action of its next turn, so you get exactly one turn to step off the red line.
 - **Stun** cancels a marked line *(default)*. A stunned Warden can still mark, because marking isn't an attack.
 - **Root** stops it walking, but it can still mark and fire.
-- **Death:** it drops the Heal Potion and unlocks the exit.
+- **Death:** it drops the Max Potion and unlocks the exit.
 
 ### Page Ward
 - **Never moves or attacks.** Only spells of its own element (Fire, Water or Rock) hurt it.
@@ -213,9 +214,32 @@ When an enemy dies (to a spell, to Burn, or through *Defeat* in the GM panel), a
 | Enemy | Loot |
 |---|---|
 | Rat, Archer, Brute, Leech | Add their fragment card from the loot pile to your **discard pile**. |
-| Warden | Take the Heal Potion card and keep it with you. The exit unlocks. |
+| Warden | Take the Max Potion card and keep it with you. The exit unlocks. |
 | Page Scrap | Its stolen fragments go **back to your hand**. |
 | Page Ward, Redactor | Nothing to take. The Redactor's death wins the demo. |
+
+In Simulation mode the app does this itself: the loot card goes straight into your discard pile (the wax-sealed loot
+art), stolen fragments go back into your hand, and the popup just shows what you got.
+
+## Cards (Simulation mode)
+
+In Tracker mode the cards stay on the table. In Simulation mode the app plays them, following the kit (pp. 2–3, 5):
+
+| | |
+|---|---|
+| Starting deck | 11 fragments: Fire ×3, Water ×2, Rock ×2, Beam ×2, Cross ×2. |
+| Hand | 5 cards. At the start of each of your turns, draw back up to 5. |
+| Deck runs out | The discard pile is shuffled into a new deck. |
+| Cast | Pick 2–3 cards from your hand: exactly one element and one shape, either can be doubled. They go to the discard pile. Fire ×3 with no shape is Unstable Fire. |
+| Reroll | Pick the hand cards to swap: they go to the discard pile first, then you draw that many (reshuffling the discard pile in if the deck runs out). |
+| New room | Hand, deck and discard pile are shuffled together into one deck, then you draw 5. Erased cards stay erased. Cards held by Page Scraps you leave behind are lost. |
+| Page Scrap steal | Takes a **random** card from your hand. With an empty hand there's nothing to steal, and it waits. |
+| Erasure zone | Ending your turn inside it erases a **random** hand card for good (the top card of the deck if your hand is empty). |
+| Max Potion | Kept outside the deck. |
+| Losing | HP 0, or your hand, deck and discard pile together no longer hold an element and a shape (and fewer than three Fires). Cards under Page Scraps and erased cards don't count. |
+
+Card draws, steals and erasures use the same saved random seed as the enemies, so undo/redo and the intention
+preview stay exact.
 
 ## Intentions (what enemies will do)
 

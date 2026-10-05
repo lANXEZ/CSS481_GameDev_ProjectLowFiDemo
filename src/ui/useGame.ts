@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { createGame, type GameState } from '../engine';
+import { createGame, type GameMode, type GameState } from '../engine';
 
-const STORAGE_KEY = 'broken-grimoire-tracker/v1';
+/** Each mode keeps its own run. The tracker keeps its original key so existing saves survive. */
+const STORAGE_KEYS: Record<GameMode, string> = {
+  tracker: 'broken-grimoire-tracker/v1',
+  simulation: 'broken-grimoire-simulation/v1',
+};
 const HISTORY_LIMIT = 200;
 const SAVED_HISTORY = 40;
 
@@ -16,6 +20,8 @@ function upgrade(s: GameState): GameState {
   const old = s as GameState & { redactionZone?: GameState['erasureZone'] };
   return {
     ...s,
+    // Saves from before Simulation mode are tracker games.
+    mode: s.mode ?? 'tracker',
     // "Redaction zone" was renamed to "Erasure zone".
     erasureZone: s.erasureZone ?? old.redactionZone ?? [],
     pendingLoot: (s.pendingLoot ?? []).map((n) => ({ ...n, toHand: n.toHand ?? [] })),
@@ -24,9 +30,9 @@ function upgrade(s: GameState): GameState {
   };
 }
 
-function load(): History {
+function load(mode: GameMode): History {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEYS[mode]);
     if (raw) {
       const saved = JSON.parse(raw) as History;
       if (saved?.present?.room) return { past: (saved.past ?? []).map(upgrade), present: upgrade(saved.present), future: [] };
@@ -34,7 +40,7 @@ function load(): History {
   } catch {
     // Storage blocked or corrupt: start fresh.
   }
-  return { past: [], present: createGame(), future: [] };
+  return { past: [], present: createGame(Date.now(), mode), future: [] };
 }
 
 export interface GameApi {
@@ -54,20 +60,20 @@ export interface GameApi {
   clearError: () => void;
 }
 
-export function useGame(): GameApi {
-  const [history, setHistory] = useState<History>(load);
+export function useGame(mode: GameMode): GameApi {
+  const [history, setHistory] = useState<History>(() => load(mode));
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     try {
       localStorage.setItem(
-        STORAGE_KEY,
+        STORAGE_KEYS[mode],
         JSON.stringify({ past: history.past.slice(-SAVED_HISTORY), present: history.present, future: [] }),
       );
     } catch {
       // Quota exceeded or storage blocked: the session still works, it just won't survive a reload.
     }
-  }, [history]);
+  }, [history, mode]);
 
   const run = useCallback(
     (fn: (s: GameState) => GameState) => {
@@ -99,9 +105,9 @@ export function useGame(): GameApi {
   }, []);
 
   const reset = useCallback(() => {
-    setHistory((h) => ({ past: [...h.past, h.present].slice(-HISTORY_LIMIT), present: createGame(), future: [] }));
+    setHistory((h) => ({ past: [...h.past, h.present].slice(-HISTORY_LIMIT), present: createGame(Date.now(), mode), future: [] }));
     setError(null);
-  }, []);
+  }, [mode]);
 
   return {
     state: history.present,

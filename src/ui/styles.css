@@ -279,6 +279,11 @@ p {
   stroke-width: 1;
 }
 
+/* over the printed board: invisible, but still catches clicks */
+.tile-art {
+  fill: transparent;
+}
+
 .tile-clickable {
   cursor: pointer;
 }
@@ -286,6 +291,10 @@ p {
 .tile-clickable:hover .tile-a,
 .tile-clickable:hover .tile-b {
   fill: #f8e7b4;
+}
+
+.tile-clickable:hover .tile-art {
+  fill: rgba(255, 236, 170, 0.28);
 }
 
 .coord {
@@ -375,32 +384,45 @@ p {
   cursor: pointer;
 }
 
-.token {
-  stroke: #f7efdc;
-  stroke-width: 2;
+.token-edge {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 2.5;
 }
 
-.unit:hover .token {
+.unit:hover .token-edge,
+.unit:focus-visible .token-edge {
   stroke: var(--gilt);
-  stroke-width: 3;
 }
 
-.token-tag {
-  fill: #f6ecd6;
-  font: 700 7.5px var(--sans);
-  text-anchor: middle;
+.unit:focus-visible {
+  outline: none;
 }
 
-.token-you {
+/* a / b when a room has two of the same unit */
+.letter-badge {
+  fill: #1c2130;
+  stroke: #f7efdc;
+  stroke-width: 1.2;
+}
+
+.letter-text {
   fill: #fff;
-  font: 800 13px var(--sans);
+  font: 800 8px var(--sans);
   text-anchor: middle;
 }
 
-.crown {
-  fill: #f2cc62;
-  stroke: #6a4b10;
-  stroke-width: 1;
+/* ticks left, on the corner of the Burn token */
+.burn-count-bg {
+  fill: #fff8e8;
+  stroke: var(--fire);
+  stroke-width: 1.2;
+}
+
+.burn-count {
+  fill: var(--fire);
+  font: 800 7px var(--sans);
+  text-anchor: middle;
 }
 
 .ring-selected {
@@ -436,9 +458,12 @@ p {
 }
 
 .hp-text {
-  fill: var(--sepia);
-  font: 700 10px var(--sans);
+  fill: #fff;
+  font: 800 8px var(--sans);
   text-anchor: middle;
+  stroke: rgba(30, 20, 10, 0.75);
+  stroke-width: 2.2px;
+  paint-order: stroke;
 }
 
 .badge-text {
@@ -629,24 +654,41 @@ p {
   gap: 4px;
 }
 
-.mini-token {
-  display: inline-grid;
-  place-items: center;
-  min-width: 28px;
-  height: 22px;
-  padding: 0 6px;
-  border-radius: 11px;
-  color: #fff;
-  font-size: 0.78rem;
-  font-weight: 700;
-  border: 1px solid rgba(255, 255, 255, 0.35);
+/* printed token with its id underneath */
+.mini-token-art {
+  flex: none;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  width: 34px;
 }
 
-.mini-token.big {
-  min-width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  font-size: 0.95rem;
+.mini-token-art img {
+  width: 30px;
+  height: 30px;
+  display: block;
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.45));
+}
+
+.mini-token-id {
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.mini-token-art.big {
+  width: 54px;
+}
+
+.mini-token-art.big img {
+  width: 52px;
+  height: 52px;
+}
+
+.mini-token-art.big .mini-token-id {
+  display: none;
 }
 
 /* wizard stats: mirrors the paper HP / mana boxes */
@@ -1367,44 +1409,27 @@ select {
   gap: 10px;
 }
 
-/* Miniature of the kit's fragment cards: coloured band on a cream card. */
+/* the printed loot card, with what to do with it underneath */
 .loot-card {
-  --card: #777;
-  width: 132px;
-  border: 2.5px solid var(--card);
-  border-radius: 10px;
-  background: var(--vellum);
-  overflow: hidden;
+  width: 136px;
+  margin: 0;
   animation: loot-in 260ms ease-out both;
 }
 
-.loot-card-band {
-  background: var(--card);
-  color: #fff;
-  text-align: center;
-  padding: 6px 6px 7px;
-  display: flex;
-  flex-direction: column;
-}
-
-.loot-card-cat {
-  font-size: 0.68rem;
-  opacity: 0.9;
-}
-
-.loot-card-title {
-  font-family: var(--serif);
-  font-weight: 800;
-  font-size: 1.2rem;
-  line-height: 1.1;
+.loot-card img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
 }
 
 .loot-card-note {
-  color: #3a2c1a;
-  font-size: 0.8rem;
+  color: var(--gilt);
+  font-size: 0.82rem;
   font-weight: 700;
   text-align: center;
-  padding: 10px 6px;
+  padding-top: 6px;
 }
 
 .loot-extras li {
@@ -1438,13 +1463,7 @@ select {
   }
 }
 
-/* ---------------------------------------------------------------- names, intents, marks */
-
-.token-name {
-  fill: #fff;
-  font: 800 9.5px var(--sans);
-  text-anchor: middle;
-}
+/* ---------------------------------------------------------------- intents, marks */
 
 /* Slay-the-Spire style intent chips at the top of each enemy's tile. */
 .intent-chip {
@@ -1484,4 +1503,249 @@ select {
   fill: #f3ead3;
   stroke: #3d2a4a;
   stroke-width: 0.8;
+}
+
+/* ---------------------------------------------------------------- mode toggle */
+
+.mode-toggle {
+  display: inline-flex;
+  margin-left: 8px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--ink-2);
+}
+
+.mode-option {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 5px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.mode-option:hover {
+  color: var(--text);
+}
+
+.mode-option.is-on {
+  background: var(--gilt);
+  color: #1c1608;
+}
+
+@media (max-width: 860px) {
+  .topbar {
+    flex-wrap: wrap;
+  }
+  .topbar-actions {
+    flex-wrap: wrap;
+  }
+  .mode-toggle {
+    margin-left: 0;
+  }
+  .mode-option {
+    padding: 4px 10px;
+  }
+}
+
+/* ---------------------------------------------------------------- hand (Simulation mode) */
+
+.hand-panel {
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hand-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.hand-head h3 {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.hand-status {
+  flex: 1;
+  font-size: 0.92rem;
+}
+
+.combo-ok {
+  color: var(--gilt);
+}
+
+.hand-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.hand {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  padding-top: 12px; /* room for a picked card to lift */
+  min-width: 0;
+}
+
+.hand-empty {
+  grid-column: 1 / -1;
+  align-self: center;
+}
+
+.card-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  border-radius: 7px;
+  transition:
+    transform 140ms ease-out,
+    box-shadow 140ms ease-out;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45);
+}
+
+.card-btn img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 7px;
+}
+
+.card-btn:hover:not(:disabled) {
+  transform: translateY(-4px);
+}
+
+.card-btn.is-picked {
+  transform: translateY(-12px);
+  box-shadow:
+    0 0 0 3px var(--gilt),
+    0 8px 18px rgba(0, 0, 0, 0.55);
+}
+
+.card-btn:disabled {
+  cursor: default;
+  filter: saturate(0.75) brightness(0.88);
+}
+
+.piles {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(2, 64px);
+  gap: 8px 10px;
+  padding-top: 12px;
+}
+
+.pile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.pile-card {
+  width: 64px;
+  aspect-ratio: 358 / 500;
+  border-radius: 5px;
+  overflow: hidden;
+  box-shadow:
+    2px 2px 0 var(--ink-3),
+    4px 4px 0 var(--line);
+}
+
+.pile-card img {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.pile-empty {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 2px dashed var(--line);
+  border-radius: 5px;
+}
+
+.pile-erased .pile-card img {
+  filter: grayscale(1) brightness(0.55);
+}
+
+.pile-label {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.pile-label strong {
+  color: var(--text);
+}
+
+@media (max-width: 560px) {
+  .hand-row {
+    flex-direction: column;
+  }
+  .piles {
+    grid-template-columns: repeat(4, 56px);
+  }
+  .pile-card {
+    width: 56px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-btn {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------- inspector extras */
+
+.ref-card summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.ref-card img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 8px 0 4px;
+  border-radius: 6px;
+}
+
+.carried {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.carried-cards {
+  display: flex;
+  gap: 4px;
+}
+
+.carried-cards img {
+  width: 40px;
+  border-radius: 3px;
+}
+
+/* Simulation: leave room under the board for the hand. */
+@media (min-width: 861px) {
+  .mode-simulation .board {
+    max-height: calc(100vh - 420px);
+  }
+}
+
+.mode-simulation .hand {
+  max-width: 600px;
 }

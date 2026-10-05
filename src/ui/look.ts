@@ -7,20 +7,6 @@ export const ELEMENT_COLOR: Record<Element, string> = {
   rock: '#6d5a3a',
 };
 
-export function tokenColor(e: Enemy): string {
-  switch (e.kind) {
-    case 'warden':
-      return '#a07a2c';
-    case 'ward':
-      return ELEMENT_COLOR[e.element ?? 'fire'];
-    case 'scrap':
-    case 'redactor':
-      return '#3d2a4a';
-    default:
-      return '#7a2e2e';
-  }
-}
-
 export const PLAYER_COLOR = '#a8822f';
 
 export function hpColor(hp: number, max: number): string {

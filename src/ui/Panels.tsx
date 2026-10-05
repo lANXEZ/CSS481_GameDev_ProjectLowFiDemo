@@ -1,5 +1,6 @@
 import { ENEMY_DEFS, ROOMS, RULES, turnOrder, type GameState } from '../engine';
-import { PLAYER_COLOR, hpColor, tokenColor, unitTitle } from './look';
+import { PLAYER_COLOR, hpColor } from './look';
+import { MiniToken } from './MiniToken';
 
 /** Whose turn it is, how many actions are left, and the order enemies will act in. */
 export function TurnTracker({ state }: { state: GameState }) {
@@ -38,9 +39,7 @@ export function TurnTracker({ state }: { state: GameState }) {
             <span className="enemy-order" aria-label="Enemy acting order">
               {order.length === 0 && <span className="muted">No enemies left</span>}
               {order.map((e) => (
-                <span key={e.id} className="mini-token" style={{ background: tokenColor(e) }} title={`${unitTitle(e)} ${e.id}`}>
-                  {e.id}
-                </span>
+                <MiniToken key={e.id} unit={e} />
               ))}
             </span>
           </span>
@@ -81,7 +80,7 @@ export function WizardCard({ state }: { state: GameState }) {
       </div>
       <div className="wizard-tags">
         <span className={p.potions ? 'tag tag-potion' : 'tag tag-off'}>
-          {p.potions ? `Heal potion ×${p.potions}` : 'No potion'}
+          {p.potions ? `Max Potion ×${p.potions}` : 'No potion'}
         </span>
         <span className={p.unstableUsed ? 'tag tag-off' : 'tag tag-fire'}>
           {p.unstableUsed ? 'Unstable Fire spent' : 'Unstable Fire ready'}

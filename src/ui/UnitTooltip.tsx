@@ -3,6 +3,7 @@ import {
   ENEMY_DEFS,
   RULES,
   actionsNextTurn,
+  cardsLabel,
   chebyshev,
   coordLabel,
   redactorMarksFull,
@@ -15,7 +16,8 @@ import {
   type Intent,
   type Statuses,
 } from '../engine';
-import { PLAYER_COLOR, cap, describeIntents, hpColor, tokenColor, unitTitle } from './look';
+import { cap, describeIntents, hpColor, unitTitle } from './look';
+import { MiniToken } from './MiniToken';
 
 interface Props {
   state: GameState;
@@ -109,7 +111,8 @@ function situation(state: GameState, e: Enemy): string[] {
       break;
     case 'scrap': {
       const held = e.stolen ?? 0;
-      if (held > 0) lines.push(`Holding ${held} stolen fragment${held === 1 ? '' : 's'}. Kill it to get ${held === 1 ? 'it' : 'them'} back in your hand.`);
+      if (e.carried?.length) lines.push(`Holding your ${cardsLabel(e.carried)}. Kill it to get ${held === 1 ? 'it' : 'them'} back in your hand.`);
+      else if (held > 0) lines.push(`Holding ${held} stolen fragment${held === 1 ? '' : 's'}. Kill it to get ${held === 1 ? 'it' : 'them'} back in your hand.`);
       if (!wardsStanding(state)) lines.push('The Wards are down: it only blocks you now.');
       else if (e.delivered) lines.push('Already gave the Redactor its mark: it keeps away from you.');
       else if (held > 0) lines.push('Carrying the fragment to the Redactor for a mark.');
@@ -141,9 +144,7 @@ function EnemyInfo({ state, e, intents }: { state: GameState; e: Enemy; intents?
   return (
     <>
       <header className="tip-head">
-        <span className="mini-token" style={{ background: tokenColor(e) }}>
-          {e.id}
-        </span>
+        <MiniToken unit={e} />
         <span className="tip-title">{unitTitle(e)}</span>
         <span className="tip-where">{coordLabel(e.pos)}</span>
       </header>
@@ -181,9 +182,7 @@ function PlayerInfo({ state }: { state: GameState }) {
   return (
     <>
       <header className="tip-head">
-        <span className="mini-token" style={{ background: PLAYER_COLOR }}>
-          YOU
-        </span>
+        <MiniToken />
         <span className="tip-title">Your wizard</span>
         <span className="tip-where">{coordLabel(p.pos)}</span>
       </header>
@@ -196,9 +195,18 @@ function PlayerInfo({ state }: { state: GameState }) {
         <dt>Actions</dt>
         <dd>{state.phase === 'player' ? `${state.actionsLeft} of ${RULES.actionsPerTurn} left this turn` : `${RULES.actionsPerTurn} per turn`}</dd>
         <dt>Potion</dt>
-        <dd>{p.potions ? `${p.potions} (restores full HP)` : 'None'}</dd>
+        <dd>{p.potions ? `Max Potion ×${p.potions} (restores full HP)` : 'None'}</dd>
         <dt>Unstable Fire</dt>
         <dd>{p.unstableUsed ? 'Used in this room' : 'Ready'}</dd>
+        {state.cards && (
+          <>
+            <dt>Cards</dt>
+            <dd>
+              {state.cards.hand.length} in hand, {state.cards.deck.length} in deck, {state.cards.discard.length} discarded
+              {state.cards.erased.length ? `, ${state.cards.erased.length} erased` : ''}
+            </dd>
+          </>
+        )}
       </dl>
       {now.length > 0 && (
         <ul className="tip-now">

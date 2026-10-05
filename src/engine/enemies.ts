@@ -1,14 +1,17 @@
+import { fragmentName, refillHand } from './cards';
 import { ENEMY_DEFS, RULES, coordLabel } from './data';
 import {
   RuleError,
   burnTickEnemy,
+  checkGrimoire,
   cloneState,
   damagePlayer,
   enemyName,
   log,
+  tableLog,
   wardsStanding,
 } from './core';
-import { endPlayerTurn, spawnEnemy } from './game';
+import { endPlayerTurn, logDraw, spawnEnemy } from './game';
 import {
   DIRS8,
   addPos,
@@ -25,7 +28,7 @@ import {
   stepAway,
   stepToward,
 } from './grid';
-import { pick } from './rng';
+import { pick, random } from './rng';
 import type { Enemy, GameState, Intent, IntentKind, LogEntry, Pos } from './types';
 
 export interface EnemyStep {
@@ -83,7 +86,8 @@ export function planEnemyTurn(state: GameState, opts: { snapshots?: boolean } = 
     s.phase = 'player';
     s.actionsLeft = RULES.actionsPerTurn;
     s.playerActed = false;
-    log(s, 'player', `Your turn ${s.turn}: draw back up to ${RULES.handSize} cards.`, true);
+    if (s.cards) logDraw(s, refillHand(s), `Your turn ${s.turn}: you draw`);
+    else log(s, 'player', `Your turn ${s.turn}: draw back up to ${RULES.handSize} cards.`, true);
     emit(null);
   } else {
     emit(null);
@@ -415,10 +419,19 @@ function decideScrap(s: GameState, e: Enemy, ctx: TurnCtx): Decision {
   if (redactorMarksFull(s)) return flee(s, e);
   if (orthAdjacent(e.pos, p)) {
     if (e.status.stun > 0) return stop('is stunned and can’t steal.');
+    // Simulation mode knows the hand: with nothing in it there is nothing to steal (kit p.5).
+    if (s.cards && s.cards.hand.length === 0) return stop('finds your hand empty: nothing to steal.');
     return act({ kind: 'steal' }, [p], () => {
       ctx.attacked = true;
       e.stolen = (e.stolen ?? 0) + 1;
-      log(s, 'enemy', `${enemyName(e)} touches YOU and steals a fragment: give it one card from your hand (tuck it under its token).`, true);
+      if (s.cards) {
+        const card = s.cards.hand.splice(Math.floor(random(s) * s.cards.hand.length), 1)[0];
+        e.carried = [...(e.carried ?? []), card];
+        log(s, 'enemy', `${enemyName(e)} touches YOU and steals your ${fragmentName(card.kind)} fragment.`);
+        checkGrimoire(s);
+      } else {
+        log(s, 'enemy', `${enemyName(e)} touches YOU and steals a fragment: give it one card from your hand (tuck it under its token).`, true);
+      }
     });
   }
   return approach(s, e, neighbors4(s, p));
@@ -470,6 +483,7 @@ function spawnScraps(s: GameState, recorder: (id: string) => (intent: Intent) =>
     }
     const scrap = spawnEnemy(s, 'scrap', pick(s, open));
     recorder(ward.id)({ kind: 'spawn' });
-    log(s, 'enemy', `${enemyName(ward)} spawns ${enemyName(scrap)}: place a 7 token on ${coordLabel(scrap.pos)}.`, true);
+    const spawned = `${enemyName(ward)} spawns ${enemyName(scrap)}`;
+    tableLog(s, 'enemy', `${spawned}: place a 7 token on ${coordLabel(scrap.pos)}.`, `${spawned} on ${coordLabel(scrap.pos)}.`);
   }
 }

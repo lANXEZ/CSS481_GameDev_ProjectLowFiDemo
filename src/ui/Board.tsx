@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState, type FocusEvent, type KeyboardEvent, type MouseEvent } from 'react';
-import { ENEMY_DEFS, RULES, coordLabel, posKey, wardsStanding, type Enemy, type GameState, type Intent, type IntentKind, type Pos } from '../engine';
-import { ELEMENT_COLOR, INTENT_INFO, PLAYER_COLOR, groupIntents, hpColor, tokenColor, unitTitle, type IntentGroup } from './look';
+import { RULES, coordLabel, posKey, wardsStanding, type Enemy, type GameState, type Intent, type IntentKind, type Pos } from '../engine';
+import { MAP_ART, MAP_FRAME, OPEN_EXIT_ART, PLAYER_TOKEN_ART, STATUS_ART, tokenArt } from './art';
+import { INTENT_INFO, groupIntents, hpColor, unitTitle, type IntentGroup } from './look';
 import { UnitTooltip } from './UnitTooltip';
 
 const T = 80; // tile size in SVG units
-const M = 26; // margin for coordinate labels
+const OX = 32; // left margin (row numbers)
+const OY = 12; // top margin (room for the map frame)
+const FRAME = MAP_FRAME * T;
 
 export interface BoardHighlights {
   /** Tiles the player can step onto (clickable). */
@@ -31,11 +34,15 @@ interface Props {
 
 export function Board({ state, intents, highlights, selectedId, onTileClick, onUnitClick }: Props) {
   const { width: W, height: H } = state.room;
-  const vbW = M + W * T + 6;
-  const vbH = H * T + M + 6;
+  const vbW = OX + W * T + FRAME + 4;
+  const vbH = OY + H * T + FRAME + 26;
 
-  const tx = (p: Pos) => M + p.x * T;
-  const ty = (p: Pos) => (H - 1 - p.y) * T + 3;
+  const tx = (p: Pos) => OX + p.x * T;
+  const ty = (p: Pos) => OY + (H - 1 - p.y) * T;
+
+  // The kit's printed board for this room, or null for boards the kit doesn't have (tests, custom layouts).
+  const art = MAP_ART[state.room.id] ?? null;
+  const exit = state.room.exit;
 
   const sets = useMemo(() => {
     const toSet = (ps?: Pos[]) => new Set((ps ?? []).map(posKey));
@@ -93,8 +100,27 @@ export function Board({ state, intents, highlights, selectedId, onTileClick, onU
           </filter>
         </defs>
 
-        {/* vellum page */}
-        <rect x={M - 4} y={-1} width={W * T + 8} height={H * T + 8} rx={6} className="board-page" />
+        {art ? (
+          <>
+            {/* the printed board: floor, pillars, START and EXIT are all in the picture */}
+            <image
+              href={art.src}
+              x={OX - FRAME}
+              y={OY - FRAME}
+              width={W * T + 2 * FRAME}
+              height={H * T + 2 * FRAME}
+              preserveAspectRatio="none"
+              className="board-art"
+            />
+            {exit && !exit.locked && art.exitLocked && (
+              <image href={OPEN_EXIT_ART} x={tx(exit.pos)} y={ty(exit.pos)} width={T} height={T} preserveAspectRatio="none" pointerEvents="none" />
+            )}
+            {exit && exit.locked && !art.exitLocked && <LockedExit x={tx(exit.pos)} y={ty(exit.pos)} />}
+          </>
+        ) : (
+          /* vellum page */
+          <rect x={OX - 4} y={OY - 4} width={W * T + 8} height={H * T + 8} rx={6} className="board-page" />
+        )}
 
         {tiles.map((p) => {
           const k = posKey(p);
@@ -109,7 +135,7 @@ export function Board({ state, intents, highlights, selectedId, onTileClick, onU
               role="gridcell"
               aria-label={coordLabel(p)}
             >
-              <rect x={x} y={y} width={T} height={T} className={(p.x + p.y) % 2 ? 'tile-a' : 'tile-b'} />
+              <rect x={x} y={y} width={T} height={T} className={art ? 'tile-art' : (p.x + p.y) % 2 ? 'tile-a' : 'tile-b'} />
               {sets.marked.has(k) && <rect x={x} y={y} width={T} height={T} fill="url(#hatch-red)" />}
               {sets.zone.has(k) && <Erased x={x} y={y} occupied={sets.occupied.has(k)} />}
               {sets.spell.has(k) && <rect x={x + 2} y={y + 2} width={T - 4} height={T - 4} rx={4} className="hl-spell" />}
@@ -122,44 +148,26 @@ export function Board({ state, intents, highlights, selectedId, onTileClick, onU
 
         {/* coordinate labels, matching the paper boards */}
         {Array.from({ length: W }, (_, x) => (
-          <text key={`cx${x}`} x={M + x * T + T / 2} y={H * T + M - 6} className="coord">
+          <text key={`cx${x}`} x={OX + x * T + T / 2} y={OY + H * T + FRAME + 19} className="coord">
             {String.fromCharCode(97 + x)}
           </text>
         ))}
         {Array.from({ length: H }, (_, y) => (
-          <text key={`cy${y}`} x={M / 2 - 2} y={(H - 1 - y) * T + T / 2 + 8} className="coord">
+          <text key={`cy${y}`} x={(OX - FRAME) / 2} y={OY + (H - 1 - y) * T + T / 2 + 5} className="coord">
             {y + 1}
           </text>
         ))}
 
-        {state.room.pillars.map((p) => (
-          <g key={`pil${posKey(p)}`} pointerEvents="none">
-            <rect x={tx(p) + 14} y={ty(p) + 14} width={T - 28} height={T - 28} rx={6} className="pillar" />
-            <rect x={tx(p) + 14} y={ty(p) + 14} width={T - 28} height={7} rx={3} className="pillar-cap" />
-            <text x={tx(p) + T / 2} y={ty(p) + T / 2 + 6} className="pillar-label">PIL</text>
-          </g>
-        ))}
+        {!art &&
+          state.room.pillars.map((p) => (
+            <g key={`pil${posKey(p)}`} pointerEvents="none">
+              <rect x={tx(p) + 14} y={ty(p) + 14} width={T - 28} height={T - 28} rx={6} className="pillar" />
+              <rect x={tx(p) + 14} y={ty(p) + 14} width={T - 28} height={7} rx={3} className="pillar-cap" />
+              <text x={tx(p) + T / 2} y={ty(p) + T / 2 + 6} className="pillar-label">PIL</text>
+            </g>
+          ))}
 
-        {state.room.exit && (
-          <g pointerEvents="none">
-            <rect
-              x={tx(state.room.exit.pos) + 7}
-              y={ty(state.room.exit.pos) + 7}
-              width={T - 14}
-              height={T - 14}
-              rx={3}
-              className={state.room.exit.locked ? 'exit exit-locked' : 'exit'}
-            />
-            <text x={tx(state.room.exit.pos) + T / 2} y={ty(state.room.exit.pos) + T / 2 + (state.room.exit.locked ? 0 : 5)} className="exit-label">
-              EXIT
-            </text>
-            {state.room.exit.locked && (
-              <text x={tx(state.room.exit.pos) + T / 2} y={ty(state.room.exit.pos) + T / 2 + 15} className="exit-sub">
-                locked
-              </text>
-            )}
-          </g>
-        )}
+        {!art && exit && (exit.locked ? <LockedExit x={tx(exit.pos)} y={ty(exit.pos)} /> : <OpenExit x={tx(exit.pos)} y={ty(exit.pos)} />)}
 
         {state.enemies.map((e) => (
           <EnemyToken
@@ -180,6 +188,32 @@ export function Board({ state, intents, highlights, selectedId, onTileClick, onU
       </svg>
       {peek && <UnitTooltip state={state} intents={intents[peek.id]} unitId={peek.id} anchor={peek.anchor} />}
     </>
+  );
+}
+
+/** Drawn exit, for boards without kit art (and over a printed open exit that the GM locked). */
+function LockedExit({ x, y }: { x: number; y: number }) {
+  return (
+    <g pointerEvents="none">
+      <rect x={x + 7} y={y + 7} width={T - 14} height={T - 14} rx={3} className="exit exit-locked" />
+      <text x={x + T / 2} y={y + T / 2} className="exit-label">
+        EXIT
+      </text>
+      <text x={x + T / 2} y={y + T / 2 + 15} className="exit-sub">
+        locked
+      </text>
+    </g>
+  );
+}
+
+function OpenExit({ x, y }: { x: number; y: number }) {
+  return (
+    <g pointerEvents="none">
+      <rect x={x + 7} y={y + 7} width={T - 14} height={T - 14} rx={3} className="exit" />
+      <text x={x + T / 2} y={y + T / 2 + 5} className="exit-label">
+        EXIT
+      </text>
+    </g>
   );
 }
 
@@ -206,19 +240,20 @@ function Erased({ x, y, occupied }: { x: number; y: number; occupied: boolean })
 }
 
 // Token layout inside an 80-unit tile, top to bottom:
-//   y+2..16  intent chips      y+19  Redactor mark dots
-//   y+40     token centre      y+63  HP bar      y+78  HP numbers
-const TOKEN_CY = 40;
-const TOKEN_R = 19;
+//   y+2..16  intent chips      y+18..64  token art (centre y+41)
+//   y+67..76 HP bar with the numbers inside
+// Statuses run down the right edge; charge / stolen cards / Redactor marks down the left.
+const TOKEN_CY = 41;
+const TOKEN_R = 23;
 
 function HpBar({ x, y, hp, max }: { x: number; y: number; hp: number; max: number }) {
-  const w = 56;
+  const w = 54;
   const fill = Math.max(0, Math.min(1, hp / max)) * w;
   return (
     <g pointerEvents="none">
-      <rect x={x + (T - w) / 2} y={y + 63} width={w} height={7} rx={2} className="hp-track" />
-      <rect x={x + (T - w) / 2} y={y + 63} width={fill} height={7} rx={2} fill={hpColor(hp, max)} />
-      <text x={x + T / 2} y={y + 78.5} className="hp-text">
+      <rect x={x + (T - w) / 2} y={y + 67} width={w} height={10} rx={3} className="hp-track" />
+      <rect x={x + (T - w) / 2} y={y + 67} width={fill} height={10} rx={3} fill={hpColor(hp, max)} />
+      <text x={x + T / 2} y={y + 75} className="hp-text">
         {hp}/{max}
       </text>
     </g>
@@ -231,13 +266,12 @@ interface Badge {
   title: string;
 }
 
-/** Small pills stacked down one side of the token (statuses on the right, special state on the left). */
-function Badges({ x, y, badges, side }: { x: number; y: number; badges: Badge[]; side: 'left' | 'right' }) {
-  const bx = side === 'right' ? x + T - 9 : x + 9;
+/** Small pills stacked down the left of the token (Warden charge, cards a Scrap carries). */
+function Badges({ x, y, badges }: { x: number; y: number; badges: Badge[] }) {
   return (
     <g pointerEvents="none">
       {badges.map((b, i) => (
-        <g key={b.title} transform={`translate(${bx}, ${y + 27 + i * 15})`}>
+        <g key={b.title} transform={`translate(${x + 9}, ${y + 27 + i * 15})`}>
           <rect x={-8.5} y={-6.5} width={17} height={13} rx={6.5} fill={b.color} stroke="#f7efdc" strokeWidth={1.2} />
           <text className="badge-text" y={3.2}>
             {b.label}
@@ -248,12 +282,31 @@ function Badges({ x, y, badges, side }: { x: number; y: number; badges: Badge[];
   );
 }
 
-function statusBadges(st: { burn: number; root: number; stun: number }): Badge[] {
-  const out: Badge[] = [];
-  if (st.burn > 0) out.push({ label: `B${st.burn}`, color: ELEMENT_COLOR.fire, title: `Burn, ${st.burn} ticks left` });
-  if (st.root > 0) out.push({ label: 'R', color: ELEMENT_COLOR.water, title: 'Rooted: can’t move next turn' });
-  if (st.stun > 0) out.push({ label: 'S', color: ELEMENT_COLOR.rock, title: 'Stunned: can’t attack next turn' });
-  return out;
+/** The kit's Burn / Root / Stun tokens, dropped on the unit's right edge. Burn shows the ticks left. */
+function StatusTokens({ x, y, status }: { x: number; y: number; status: { burn: number; root: number; stun: number } }) {
+  const shown = (['burn', 'root', 'stun'] as const).filter((k) => status[k] > 0);
+  const size = 15;
+  return (
+    <g pointerEvents="none">
+      {shown.map((k, i) => {
+        const sx = x + T - size - 1;
+        const sy = y + 20 + i * (size + 2);
+        return (
+          <g key={k}>
+            <image href={STATUS_ART[k]} x={sx} y={sy} width={size} height={size} />
+            {k === 'burn' && (
+              <>
+                <circle cx={sx + 1} cy={sy + 1} r={5} className="burn-count-bg" />
+                <text x={sx + 1} y={sy + 3.6} className="burn-count">
+                  {status.burn}
+                </text>
+              </>
+            )}
+          </g>
+        );
+      })}
+    </g>
+  );
 }
 
 // ---------------------------------------------------------------- intent chips
@@ -385,16 +438,16 @@ function IntentRow({ cx, y, intents }: { cx: number; y: number; intents?: Intent
   );
 }
 
-/** The Redactor's marks: five dots, filled as Page Scraps bring it stolen fragments. */
-function MarkDots({ cx, y, marks }: { cx: number; y: number; marks: number }) {
+/** The Redactor's marks: five dots down the left of its token, filled as Page Scraps bring it stolen fragments. */
+function MarkDots({ x, y, marks }: { x: number; y: number; marks: number }) {
   const n = RULES.redactorMaxMarks;
   const gap = 8;
-  const half = ((n - 1) / 2) * gap + 5;
+  const top = y + 23;
   return (
     <g pointerEvents="none" aria-hidden>
-      <rect x={cx - half} y={y + 15} width={half * 2} height={9} rx={4.5} className="mark-backing" />
+      <rect x={x + 3} y={top - 5} width={10} height={(n - 1) * gap + 10} rx={5} className="mark-backing" />
       {Array.from({ length: n }, (_, i) => (
-        <circle key={i} cx={cx + (i - (n - 1) / 2) * gap} cy={y + 19.5} r={2.7} className={i < marks ? 'mark-dot mark-on' : 'mark-dot'} />
+        <circle key={i} cx={x + 8} cy={top + i * gap} r={2.8} className={i < marks ? 'mark-dot mark-on' : 'mark-dot'} />
       ))}
     </g>
   );
@@ -443,6 +496,16 @@ interface EnemyTokenProps extends UnitHandlers {
   intents?: Intent[];
 }
 
+/** The printed token, with a hover / focus edge on top. */
+function TokenArt({ cx, cy, href }: { cx: number; cy: number; href: string }) {
+  return (
+    <>
+      <image href={href} x={cx - TOKEN_R} y={cy - TOKEN_R} width={TOKEN_R * 2} height={TOKEN_R * 2} filter="url(#token-shadow)" />
+      <circle cx={cx} cy={cy} r={TOKEN_R - 0.5} className="token-edge" />
+    </>
+  );
+}
+
 function EnemyToken({ e, x, y, selected, acting, shielded, showLetter, intents, ...handlers }: EnemyTokenProps) {
   const cx = x + T / 2;
   const cy = y + TOKEN_CY;
@@ -450,34 +513,25 @@ function EnemyToken({ e, x, y, selected, acting, shielded, showLetter, intents, 
   const special: Badge[] = [];
   if (e.kind === 'warden' && e.charge) special.push({ label: '⚡', color: '#a07a2c', title: 'Holding a telegraph charge' });
   if (e.kind === 'scrap' && (e.stolen ?? 0) > 0) special.push({ label: `F${e.stolen}`, color: '#7d5ba6', title: `Holding ${e.stolen} stolen fragment(s)` });
-  const name = ENEMY_DEFS[e.kind].shortName;
-  const sub = e.element ?? (showLetter ? e.id.slice(1) : '');
-  const nameY = sub ? cy + 1.5 : cy + 3.5;
 
   return (
     <g {...unitProps(handlers)} aria-label={`${unitTitle(e)} ${e.id}, ${e.hp} of ${e.maxHp} HP`}>
       {(selected || acting) && <circle cx={cx} cy={cy} r={r + 5} className={acting ? 'ring-acting' : 'ring-selected'} />}
       {shielded && <circle cx={cx} cy={cy} r={r + 3} className="ring-shield" />}
       {e.kind === 'redactor' && e.mode === 'chaos' && <circle cx={cx} cy={cy} r={r + 3} className="ring-chaos" />}
-      <circle cx={cx} cy={cy} r={r} fill={tokenColor(e)} filter="url(#token-shadow)" className="token" />
-      {e.kind === 'warden' && <path d={`M${cx - 8} ${cy - 13} l3 -6 l5 4 l5 -4 l3 6 z`} className="crown" />}
-      <text
-        x={cx}
-        y={nameY}
-        className="token-name"
-        {...(name.length > 6 ? { textLength: 33, lengthAdjust: 'spacingAndGlyphs' } : {})}
-      >
-        {name}
-      </text>
-      {sub && (
-        <text x={cx} y={cy + 11} className="token-tag">
-          {sub}
-        </text>
+      <TokenArt cx={cx} cy={cy} href={tokenArt(e)} />
+      {showLetter && (
+        <g pointerEvents="none">
+          <circle cx={cx + r * 0.78} cy={cy + r * 0.62} r={6} className="letter-badge" />
+          <text x={cx + r * 0.78} y={cy + r * 0.62 + 3} className="letter-text">
+            {e.id.slice(1)}
+          </text>
+        </g>
       )}
       <HpBar x={x} y={y} hp={e.hp} max={e.maxHp} />
-      <Badges x={x} y={y} badges={statusBadges(e.status)} side="right" />
-      <Badges x={x} y={y} badges={special} side="left" />
-      {e.kind === 'redactor' && <MarkDots cx={cx} y={y} marks={e.marks ?? 0} />}
+      <StatusTokens x={x} y={y} status={e.status} />
+      <Badges x={x} y={y} badges={special} />
+      {e.kind === 'redactor' && <MarkDots x={x} y={y} marks={e.marks ?? 0} />}
       <IntentRow cx={cx} y={y} intents={intents} />
     </g>
   );
@@ -490,12 +544,9 @@ function PlayerToken({ state, x, y, selected, ...handlers }: { state: GameState;
   return (
     <g {...unitProps(handlers)} aria-label={`You, ${p.hp} of ${p.maxHp} HP`}>
       {selected && <circle cx={cx} cy={cy} r={TOKEN_R + 5} className="ring-selected" />}
-      <circle cx={cx} cy={cy} r={TOKEN_R} fill={PLAYER_COLOR} filter="url(#token-shadow)" className="token" />
-      <text x={cx} y={cy + 4.5} className="token-you">
-        YOU
-      </text>
+      <TokenArt cx={cx} cy={cy} href={PLAYER_TOKEN_ART} />
       <HpBar x={x} y={y} hp={p.hp} max={p.maxHp} />
-      <Badges x={x} y={y} badges={statusBadges(p.status)} side="right" />
+      <StatusTokens x={x} y={y} status={p.status} />
     </g>
   );
 }

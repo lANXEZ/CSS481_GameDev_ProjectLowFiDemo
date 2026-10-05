@@ -14,6 +14,7 @@ export function gmEdit(state: GameState, note: string, edit: (s: GameState) => v
   log(s, 'gm', `GM: ${note}`);
   if (s.player.hp <= 0 && s.phase !== 'lost') {
     s.phase = 'lost';
+    s.lostReason = 'hp';
     log(s, 'system', 'The wizard has fallen. Game over.');
   }
   return s;

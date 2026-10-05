@@ -5,11 +5,13 @@ import {
   enemiesOnTiles,
   immunityReason,
   moveTarget,
+  rerollError,
   spellCost,
   spellDamage,
   spellError,
   spellTiles,
   unstableError,
+  type CardCombo,
   type Dir,
   type Element,
   type GameState,
@@ -19,8 +21,14 @@ import { ELEMENT_COLOR, cap } from './look';
 
 interface Props {
   state: GameState;
-  spec: SpellSpec;
-  setSpec: (s: SpellSpec) => void;
+  /** Tracker: the spell built from the element / shape chips. Simulation: the spell the picked cards make, if any. */
+  spec: SpellSpec | null;
+  /** Tracker only: change the chip selection. */
+  setSpec?: (s: SpellSpec) => void;
+  /** Simulation only: what the picked hand cards make. */
+  combo?: CardCombo | null;
+  /** Simulation only: ids of the picked hand cards (the cast spends exactly these). */
+  cardIds?: number[];
   setPreviewDir: (d: Dir | null) => void;
   onMove: (d: Dir) => void;
   onCast: (d: Dir | null) => void;
@@ -39,21 +47,12 @@ const ARROWS: { dir: Dir; glyph: string; area: string }[] = [
 ];
 
 export function ActionPanel(props: Props) {
-  const { state, spec, setSpec, setPreviewDir } = props;
+  const { state } = props;
   const p = state.player;
-  const invalid = spellError(spec);
-  const cost = spellCost(spec);
-  const noMana = p.mana < cost;
+  const sim = state.mode === 'simulation';
   const unstableBlocked = unstableError(state);
-
-  const setElement = (element: Element) => setSpec({ ...spec, element });
-  const toggleDoubleElement = () =>
-    setSpec({ ...spec, elementCount: spec.elementCount === 2 ? 1 : 2, shapeCount: spec.elementCount === 2 ? spec.shapeCount : 1 });
-  const toggleDoubleShape = () =>
-    setSpec({ ...spec, shapeCount: spec.shapeCount === 2 ? 1 : 2, elementCount: spec.shapeCount === 2 ? spec.elementCount : 1 });
-
-  // Who would the spell hit? Shown for Cross directly; for Beam per hovered direction on the board.
-  const crossTargets = spec.shape === 'cross' ? enemiesOnTiles(state, spellTiles(state, spec, null)) : [];
+  const picks = props.cardIds?.length ?? 0;
+  const rerollBlocked = rerollError(state, props.cardIds);
 
   return (
     <section className="panel actions" aria-label="Your actions">
@@ -82,82 +81,16 @@ export function ActionPanel(props: Props) {
 
       <div className="action-group">
         <h3>Cast</h3>
-        <div className="spell-row" role="group" aria-label="Element">
-          {(['fire', 'water', 'rock'] as Element[]).map((el) => (
-            <button
-              key={el}
-              className={`chip${spec.element === el ? ' chip-on' : ''}`}
-              style={{ ['--chip' as string]: ELEMENT_COLOR[el] }}
-              onClick={() => setElement(el)}
-              aria-pressed={spec.element === el}
-            >
-              {cap(el)}
-            </button>
-          ))}
-          <button className={`chip chip-double${spec.elementCount === 2 ? ' chip-on' : ''}`} onClick={toggleDoubleElement} aria-pressed={spec.elementCount === 2}>
-            ×2
-          </button>
-        </div>
-        <div className="spell-row" role="group" aria-label="Shape">
-          {(['beam', 'cross'] as const).map((sh) => (
-            <button
-              key={sh}
-              className={`chip${spec.shape === sh ? ' chip-on' : ''}`}
-              style={{ ['--chip' as string]: '#7d5ba6' }}
-              onClick={() => setSpec({ ...spec, shape: sh })}
-              aria-pressed={spec.shape === sh}
-            >
-              {cap(sh)}
-            </button>
-          ))}
-          <button className={`chip chip-double${spec.shapeCount === 2 ? ' chip-on' : ''}`} onClick={toggleDoubleShape} aria-pressed={spec.shapeCount === 2}>
-            ×2
-          </button>
-        </div>
-        <p className="spell-summary">
-          {spec.elementCount + spec.shapeCount} fragments, <strong>{cost} mana</strong>, {spellDamage(spec)} dmg and{' '}
-          {ELEMENT_EFFECT[spec.element].text.split(':')[0].toLowerCase()}
-          {spec.shape === 'beam'
-            ? `, ${spec.shapeCount === 2 ? RULES.doubledBeamLength : RULES.beamLength}-tile line`
-            : `, reaches ${spec.shapeCount === 2 ? RULES.doubledCrossReach : RULES.crossReach} tile${spec.shapeCount === 2 ? 's' : ''} out`}
-          .
-        </p>
-        {noMana && <p className="warn">Not enough mana ({p.mana}/{cost}). Meditate first.</p>}
+        {sim ? <SimCast {...props} /> : <ChipCast {...props} />}
 
-        {spec.shape === 'beam' ? (
-          <div className="move-row">
-            <div className="dpad dpad-cast" onMouseLeave={() => setPreviewDir(null)}>
-              {ARROWS.map(({ dir, glyph, area }) => (
-                <button
-                  key={dir}
-                  className="dpad-btn"
-                  style={{ gridArea: area }}
-                  disabled={!!castError(state, spec, dir)}
-                  onMouseEnter={() => setPreviewDir(dir)}
-                  onFocus={() => setPreviewDir(dir)}
-                  onBlur={() => setPreviewDir(null)}
-                  onClick={() => props.onCast(dir)}
-                  aria-label={`Cast beam ${dir}`}
-                >
-                  {glyph}
-                </button>
-              ))}
-            </div>
-            <p className="hint">Hover a direction to preview the hit tiles, click to cast.</p>
-          </div>
-        ) : (
+        {(!sim || props.combo?.kind === 'unstable') && (
           <>
-            <button className="btn btn-spell" disabled={!!invalid || noMana} onClick={() => props.onCast(null)}>
-              Cast {spec.shapeCount === 2 ? 'double ' : ''}Cross around you
+            <button className="btn btn-unstable" disabled={!!unstableBlocked} onClick={props.onUnstable} title={unstableBlocked ?? undefined}>
+              Unstable Fire (Fire ×3, {RULES.unstableCost} mana)
             </button>
-            <TargetList state={state} targets={crossTargets} element={spec.element} />
+            {unstableBlocked && <p className="hint">{unstableBlocked}</p>}
           </>
         )}
-
-        <button className="btn btn-unstable" disabled={!!unstableBlocked} onClick={props.onUnstable} title={unstableBlocked ?? undefined}>
-          Unstable Fire (Fire ×3, {RULES.unstableCost} mana)
-        </button>
-        {unstableBlocked && <p className="hint">{unstableBlocked}</p>}
       </div>
 
       <div className="action-group other-actions">
@@ -167,8 +100,13 @@ export function ActionPanel(props: Props) {
         <button className="btn" onClick={props.onPotion} disabled={p.potions <= 0}>
           Drink potion (full HP)
         </button>
-        <button className="btn" onClick={props.onReroll}>
-          Reroll hand
+        <button
+          className="btn"
+          onClick={props.onReroll}
+          disabled={!!rerollBlocked}
+          title={sim ? (rerollBlocked ?? 'Discard the picked cards and draw that many') : 'Discard any cards from your hand and draw that many'}
+        >
+          {sim && picks > 0 ? `Reroll ${picks} card${picks === 1 ? '' : 's'}` : 'Reroll cards'}
         </button>
       </div>
 
@@ -176,6 +114,126 @@ export function ActionPanel(props: Props) {
         End turn{state.actionsLeft > 0 ? ` (${state.actionsLeft} unused)` : ''}
       </button>
     </section>
+  );
+}
+
+/** Tracker mode: the fragments are on the table, so the spell is picked with element and shape chips. */
+function ChipCast(props: Props) {
+  const spec = props.spec!;
+  const setSpec = props.setSpec!;
+  const setElement = (element: Element) => setSpec({ ...spec, element });
+  const toggleDoubleElement = () =>
+    setSpec({ ...spec, elementCount: spec.elementCount === 2 ? 1 : 2, shapeCount: spec.elementCount === 2 ? spec.shapeCount : 1 });
+  const toggleDoubleShape = () =>
+    setSpec({ ...spec, shapeCount: spec.shapeCount === 2 ? 1 : 2, elementCount: spec.shapeCount === 2 ? spec.elementCount : 1 });
+
+  return (
+    <>
+      <div className="spell-row" role="group" aria-label="Element">
+        {(['fire', 'water', 'rock'] as Element[]).map((el) => (
+          <button
+            key={el}
+            className={`chip${spec.element === el ? ' chip-on' : ''}`}
+            style={{ ['--chip' as string]: ELEMENT_COLOR[el] }}
+            onClick={() => setElement(el)}
+            aria-pressed={spec.element === el}
+          >
+            {cap(el)}
+          </button>
+        ))}
+        <button className={`chip chip-double${spec.elementCount === 2 ? ' chip-on' : ''}`} onClick={toggleDoubleElement} aria-pressed={spec.elementCount === 2}>
+          ×2
+        </button>
+      </div>
+      <div className="spell-row" role="group" aria-label="Shape">
+        {(['beam', 'cross'] as const).map((sh) => (
+          <button
+            key={sh}
+            className={`chip${spec.shape === sh ? ' chip-on' : ''}`}
+            style={{ ['--chip' as string]: '#7d5ba6' }}
+            onClick={() => setSpec({ ...spec, shape: sh })}
+            aria-pressed={spec.shape === sh}
+          >
+            {cap(sh)}
+          </button>
+        ))}
+        <button className={`chip chip-double${spec.shapeCount === 2 ? ' chip-on' : ''}`} onClick={toggleDoubleShape} aria-pressed={spec.shapeCount === 2}>
+          ×2
+        </button>
+      </div>
+      <CastControls {...props} spec={spec} />
+    </>
+  );
+}
+
+/** Simulation mode: the spell comes from the cards picked in the hand under the board. */
+function SimCast(props: Props) {
+  const { combo, spec } = props;
+  if (!combo || (combo.kind === 'invalid' && (props.cardIds?.length ?? 0) === 0)) {
+    return <p className="hint">Pick 2–3 fragment cards from your hand (under the board): one element and one shape, either can be doubled.</p>;
+  }
+  if (combo.kind === 'invalid') return <p className="warn">{combo.reason}</p>;
+  if (combo.kind === 'unstable') return <p className="hint">Three Fires with no shape: a 3×3 burst around you.</p>;
+  return <CastControls {...props} spec={spec!} />;
+}
+
+/** Cost line, then the Beam direction pad or the Cross button. */
+function CastControls(props: Props & { spec: SpellSpec }) {
+  const { state, spec, setPreviewDir, cardIds } = props;
+  const p = state.player;
+  const invalid = spellError(spec);
+  const cost = spellCost(spec);
+  const noMana = p.mana < cost;
+  // Who would the spell hit? Shown for Cross directly; for Beam per hovered direction on the board.
+  const crossTargets = spec.shape === 'cross' ? enemiesOnTiles(state, spellTiles(state, spec, null)) : [];
+  const crossBlocked = castError(state, spec, null, cardIds);
+
+  return (
+    <>
+      <p className="spell-summary">
+        {spec.elementCount + spec.shapeCount} fragments, <strong>{cost} mana</strong>, {spellDamage(spec)} dmg and{' '}
+        {ELEMENT_EFFECT[spec.element].text.split(':')[0].toLowerCase()}
+        {spec.shape === 'beam'
+          ? `, ${spec.shapeCount === 2 ? RULES.doubledBeamLength : RULES.beamLength}-tile line`
+          : `, reaches ${spec.shapeCount === 2 ? RULES.doubledCrossReach : RULES.crossReach} tile${spec.shapeCount === 2 ? 's' : ''} out`}
+        .
+      </p>
+      {noMana && (
+        <p className="warn">
+          Not enough mana ({p.mana}/{cost}). Meditate first.
+        </p>
+      )}
+
+      {spec.shape === 'beam' ? (
+        <div className="move-row">
+          <div className="dpad dpad-cast" onMouseLeave={() => setPreviewDir(null)}>
+            {ARROWS.map(({ dir, glyph, area }) => (
+              <button
+                key={dir}
+                className="dpad-btn"
+                style={{ gridArea: area }}
+                disabled={!!castError(state, spec, dir, cardIds)}
+                onMouseEnter={() => setPreviewDir(dir)}
+                onFocus={() => setPreviewDir(dir)}
+                onBlur={() => setPreviewDir(null)}
+                onClick={() => props.onCast(dir)}
+                aria-label={`Cast beam ${dir}`}
+              >
+                {glyph}
+              </button>
+            ))}
+          </div>
+          <p className="hint">Hover a direction to preview the hit tiles, click to cast.</p>
+        </div>
+      ) : (
+        <>
+          <button className="btn btn-spell" disabled={!!invalid || !!crossBlocked} onClick={() => props.onCast(null)}>
+            Cast {spec.shapeCount === 2 ? 'double ' : ''}Cross around you
+          </button>
+          <TargetList state={state} targets={crossTargets} element={spec.element} />
+        </>
+      )}
+    </>
   );
 }
 

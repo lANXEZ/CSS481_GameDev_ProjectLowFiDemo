@@ -5,6 +5,7 @@ import {
   acknowledgeLoot,
   advanceRoom,
   canPlaceAt,
+  comboFromCards,
   endPlayerTurn,
   enemyName,
   gmAddEnemy,
@@ -22,6 +23,7 @@ import {
   spellTiles,
   unstableTiles,
   type Dir,
+  type GameMode,
   type GameState,
   type Pos,
   type SpellSpec,
@@ -29,6 +31,7 @@ import {
 import { ActionPanel } from './ActionPanel';
 import { Board, type BoardHighlights } from './Board';
 import { EnemyTurnPanel } from './EnemyTurnPanel';
+import { HandPanel } from './HandPanel';
 import { Inspector, type PlaceMode } from './Inspector';
 import { LogPanel } from './LogPanel';
 import { LootDialog } from './LootDialog';
@@ -38,17 +41,72 @@ import { useGame } from './useGame';
 
 const DIRS: Dir[] = ['up', 'down', 'left', 'right'];
 const KEY_DIRS: Record<string, Dir> = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
+const MODE_KEY = 'broken-grimoire/mode';
 
+function loadMode(): GameMode {
+  try {
+    return localStorage.getItem(MODE_KEY) === 'simulation' ? 'simulation' : 'tracker';
+  } catch {
+    return 'tracker';
+  }
+}
+
+/** Picks the mode; each mode is its own game with its own save and undo history. */
 export function App() {
-  const game = useGame();
+  const [mode, setMode] = useState<GameMode>(loadMode);
+  useEffect(() => {
+    try {
+      localStorage.setItem(MODE_KEY, mode);
+    } catch {
+      // Storage blocked: the mode just isn't remembered.
+    }
+  }, [mode]);
+  return <Game key={mode} mode={mode} onModeChange={setMode} />;
+}
+
+function ModeToggle({ mode, onChange }: { mode: GameMode; onChange: (m: GameMode) => void }) {
+  const options: { value: GameMode; label: string; hint: string }[] = [
+    { value: 'tracker', label: 'Board tracker', hint: 'Follow along with the paper game' },
+    { value: 'simulation', label: 'Simulation', hint: 'Play the whole game here, cards included' },
+  ];
+  return (
+    <div className="mode-toggle" role="radiogroup" aria-label="Mode">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          role="radio"
+          aria-checked={mode === o.value}
+          className={`mode-option${mode === o.value ? ' is-on' : ''}`}
+          onClick={() => onChange(o.value)}
+          title={o.hint}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Game({ mode, onModeChange }: { mode: GameMode; onModeChange: (m: GameMode) => void }) {
+  const game = useGame(mode);
   const { state, run } = game;
+  const sim = mode === 'simulation';
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [placeMode, setPlaceMode] = useState<PlaceMode>(null);
-  const [spec, setSpec] = useState<SpellSpec>({ element: 'fire', elementCount: 1, shape: 'beam', shapeCount: 1 });
+  const [chipSpec, setChipSpec] = useState<SpellSpec>({ element: 'fire', elementCount: 1, shape: 'beam', shapeCount: 1 });
+  const [pickedCards, setPickedCards] = useState<number[]>([]);
   const [previewDir, setPreviewDir] = useState<Dir | null>(null);
   const [wheelOpen, setWheelOpen] = useState(false);
   const [stepIndex, setStepIndex] = useState(-1);
+
+  // Simulation: the spell is whatever the picked hand cards make. Picks of cards that left the hand are dropped.
+  const hand = state.cards?.hand;
+  const picked = useMemo(() => (hand ? pickedCards.filter((id) => hand.some((c) => c.id === id)) : []), [hand, pickedCards]);
+  const combo = useMemo(() => (hand && picked.length ? comboFromCards(hand.filter((c) => picked.includes(c.id))) : null), [hand, picked]);
+  const spec: SpellSpec | null = sim ? (combo?.kind === 'spell' ? combo.spec : null) : chipSpec;
+  // Picks serve both actions: 2–3 cards craft a spell, any number can be rerolled.
+  const togglePick = (id: number) => setPickedCards((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...picked, id]));
 
   // The enemy turn is fully determined by the state (seeded RNG), so it can be derived.
   const plan = useMemo(() => (state.phase === 'enemy' ? planEnemyTurn(state) : null), [state]);
@@ -77,15 +135,24 @@ export function App() {
     if (state.phase !== 'player') return {};
     const moves = DIRS.map((d) => moveTarget(state, d)).filter((p): p is Pos => !!p);
     let spell: Pos[] = [];
-    if (wheelOpen) spell = unstableTiles(state);
-    else if (spec.shape === 'cross') spell = spellTiles(state, spec, null);
-    else if (previewDir) spell = spellTiles(state, spec, previewDir);
+    if (wheelOpen || combo?.kind === 'unstable') spell = unstableTiles(state);
+    else if (spec?.shape === 'cross') spell = spellTiles(state, spec, null);
+    else if (spec && previewDir) spell = spellTiles(state, spec, previewDir);
     return { moves, spell };
-  }, [placeMode, step, state, spec, previewDir, wheelOpen]);
+  }, [placeMode, step, state, spec, combo, previewDir, wheelOpen]);
 
   const act = (fn: (s: GameState) => GameState) => {
     setPreviewDir(null);
     return run(fn);
+  };
+
+  const cast = (dir: Dir | null) => {
+    if (!spec) return;
+    if (sim) {
+      if (act((s) => playerCast(s, spec, dir, picked))) setPickedCards([]);
+    } else {
+      act((s) => playerCast(s, spec, dir));
+    }
   };
 
   const onTileClick = (p: Pos) => {
@@ -124,6 +191,7 @@ export function App() {
       } else if (e.key === 'Escape') {
         setPlaceMode(null);
         setSelectedId(null);
+        setPickedCards([]);
       } else if (KEY_DIRS[e.key] && state.phase === 'player' && !document.querySelector('.modal-backdrop')) {
         const d = KEY_DIRS[e.key];
         if (moveTarget(state, d)) {
@@ -144,19 +212,20 @@ export function App() {
   }, [state, game.previous]);
 
   const newGame = () => {
-    if (window.confirm('Start a new run from Room 1? You can still undo this.')) {
+    if (window.confirm(`Start a new ${sim ? 'simulation' : 'run'} from Room 1? You can still undo this.`)) {
       game.reset();
       setSelectedId(null);
       setPlaceMode(null);
+      setPickedCards([]);
     }
   };
 
   return (
-    <div className="app">
+    <div className={`app mode-${mode}`}>
       <header className="topbar">
         <div className="brand">
           <h1>Broken Grimoire</h1>
-          <span className="brand-sub">Board tracker for the paper demo</span>
+          <span className="brand-sub">{sim ? 'Full simulation of the demo' : 'Board tracker for the paper demo'}</span>
         </div>
         <div className="topbar-actions">
           <button className="btn btn-small" onClick={game.undo} disabled={!game.canUndo} title="Ctrl+Z">
@@ -168,6 +237,7 @@ export function App() {
           <button className="btn btn-small btn-quiet" onClick={newGame}>
             New run
           </button>
+          <ModeToggle mode={mode} onChange={onModeChange} />
         </div>
       </header>
 
@@ -195,10 +265,24 @@ export function App() {
                 setSelectedId(id === selectedId ? null : id);
               }}
             />
-            {step && <div className="board-caption">Showing step {stepIndex + 1} of {plan!.steps.length}</div>}
+            {step && (
+              <div className="board-caption">
+                Showing step {stepIndex + 1} of {plan!.steps.length}
+              </div>
+            )}
           </div>
+          {sim && (
+            <HandPanel
+              state={shown}
+              selected={picked}
+              onToggle={togglePick}
+              onClear={() => setPickedCards([])}
+              combo={combo}
+              interactive={state.phase === 'player' && !step}
+            />
+          )}
           <Legend />
-          {freshPaper.length > 0 && state.phase === 'player' && (
+          {!sim && freshPaper.length > 0 && state.phase === 'player' && (
             <div className="table-callout" aria-live="polite">
               <h3>Do on the table</h3>
               <ul>
@@ -219,20 +303,30 @@ export function App() {
               <ActionPanel
                 state={state}
                 spec={spec}
-                setSpec={setSpec}
+                setSpec={sim ? undefined : setChipSpec}
+                combo={sim ? combo : undefined}
+                cardIds={sim ? picked : undefined}
                 setPreviewDir={setPreviewDir}
                 onMove={(d) => act((s) => playerMove(s, d))}
-                onCast={(d) => act((s) => playerCast(s, spec, d))}
+                onCast={cast}
                 onUnstable={() => setWheelOpen(true)}
                 onMeditate={() => act(playerMeditate)}
                 onPotion={() => act(playerDrinkPotion)}
-                onReroll={() => act(playerReroll)}
-                onEndTurn={() => act(endPlayerTurn)}
+                onReroll={() => act((s) => playerReroll(s, picked)) && setPickedCards([])}
+                onEndTurn={() => act(endPlayerTurn) && setPickedCards([])}
               />
             )}
 
             {plan && (
-              <EnemyTurnPanel state={state} plan={plan} stepIndex={stepIndex} setStepIndex={setStepIndex} onFinish={() => run(() => plan.final)} />
+              <EnemyTurnPanel
+                key={state.turn}
+                state={state}
+                plan={plan}
+                stepIndex={stepIndex}
+                setStepIndex={setStepIndex}
+                onFinish={() => run(() => plan.final)}
+                auto={sim}
+              />
             )}
 
             <Inspector
@@ -256,17 +350,17 @@ export function App() {
           onCancel={() => setWheelOpen(false)}
           onApply={(dmg) => {
             setWheelOpen(false);
-            act((s) => playerUnstableFire(s, dmg));
+            if (act((s) => playerUnstableFire(s, dmg))) setPickedCards([]);
           }}
         />
       )}
 
       {state.pendingLoot.length > 0 && state.phase !== 'won' && state.phase !== 'lost' && (
-        <LootDialog notices={state.pendingLoot} onConfirm={() => game.amend(acknowledgeLoot)} />
+        <LootDialog notices={state.pendingLoot} mode={mode} onConfirm={() => game.amend(acknowledgeLoot)} />
       )}
       {state.phase === 'roomExit' && <RoomExitDialog state={state} onAdvance={() => run(advanceRoom)} onUndo={game.undo} />}
       {(state.phase === 'won' || state.phase === 'lost') && (
-        <EndDialog won={state.phase === 'won'} onUndo={game.undo} onNew={() => game.reset()} />
+        <EndDialog state={state} onUndo={game.undo} onNew={() => game.reset()} />
       )}
     </div>
   );
@@ -286,7 +380,11 @@ function RoomExitDialog({ state, onAdvance, onUndo }: { state: GameState; onAdva
         ) : (
           <p>The room is clear.</p>
         )}
-        <p className="hint">HP carries over and mana resets to 3. Set up the next board before continuing.</p>
+        <p className="hint">
+          {state.cards
+            ? 'HP carries over and mana resets to 3. Your hand, deck and discard pile are shuffled together and you draw 5.'
+            : 'HP carries over and mana resets to 3. Set up the next board before continuing.'}
+        </p>
         <div className="modal-actions">
           <button className="btn btn-quiet" onClick={onUndo}>
             Step back
@@ -300,12 +398,20 @@ function RoomExitDialog({ state, onAdvance, onUndo }: { state: GameState; onAdva
   );
 }
 
-function EndDialog({ won, onUndo, onNew }: { won: boolean; onUndo: () => void; onNew: () => void }) {
+function EndDialog({ state, onUndo, onNew }: { state: GameState; onUndo: () => void; onNew: () => void }) {
+  const won = state.phase === 'won';
+  const broken = state.lostReason === 'grimoire';
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="end-title">
       <div className="modal">
-        <h2 id="end-title">{won ? 'The grimoire is restored' : 'The wizard has fallen'}</h2>
-        <p>{won ? 'You beat the demo. Export the log to keep this playtest.' : 'HP reached 0. Undo to replay the last step, or start over.'}</p>
+        <h2 id="end-title">{won ? 'The grimoire is restored' : broken ? 'The grimoire is broken' : 'The wizard has fallen'}</h2>
+        <p>
+          {won
+            ? 'You beat the demo. Export the log to keep this playtest.'
+            : broken
+              ? 'Your hand, deck and discard pile no longer hold an element and a shape, so you can’t cast anything. Undo to replay the last step, or start over.'
+              : 'HP reached 0. Undo to replay the last step, or start over.'}
+        </p>
         <div className="modal-actions">
           <button className="btn btn-quiet" onClick={onUndo}>
             Undo last step

@@ -14,7 +14,9 @@ import {
   type GameState,
   type Statuses,
 } from '../engine';
-import { tokenColor, unitTitle, PLAYER_COLOR } from './look';
+import { cardArt, referenceArt } from './art';
+import { unitTitle } from './look';
+import { MiniToken } from './MiniToken';
 
 export type PlaceMode = { kind: 'move'; id: string } | { kind: 'add'; enemy: EnemyKind; element?: Element } | null;
 
@@ -85,9 +87,7 @@ function EnemyEditor({ state, e, run, placeMode, setPlaceMode, onClose }: Editor
   return (
     <>
       <header className="inspector-head">
-        <span className="mini-token big" style={{ background: tokenColor(e) }}>
-          {e.id}
-        </span>
+        <MiniToken unit={e} big />
         <div>
           <h2>{unitTitle(e)}</h2>
           <p className="muted">
@@ -101,6 +101,11 @@ function EnemyEditor({ state, e, run, placeMode, setPlaceMode, onClose }: Editor
       <p className="card-text">{def.attackText}</p>
       <p className="card-text muted">{def.behavior}</p>
       {def.drop && <p className="card-text">Drops: {def.drop}</p>}
+      <details className="ref-card">
+        <summary>Printed reference card</summary>
+        <img src={referenceArt(e.kind)} alt={`${def.name} reference card`} />
+        <p className="hint">The rules above are the current ones where the print differs.</p>
+      </details>
 
       <div className="editor-grid">
         <Stepper label="HP" value={e.hp} min={0} max={99} onChange={(v) => patch({ hp: v }, `HP ${e.hp} → ${v}`)} />
@@ -122,9 +127,25 @@ function EnemyEditor({ state, e, run, placeMode, setPlaceMode, onClose }: Editor
         {e.kind === 'redactor' && (
           <Stepper label="Marks" value={e.marks ?? 0} min={0} max={RULES.redactorMaxMarks} onChange={(v) => patch({ marks: v }, `marks → ${v}`)} />
         )}
+        {e.kind === 'scrap' && state.cards && (
+          <div className="carried">
+            <span className="stepper-label">Carrying</span>
+            {e.carried?.length ? (
+              <span className="carried-cards">
+                {e.carried.map((c) => (
+                  <img key={c.id} src={cardArt(c)} alt={`${c.kind} fragment`} />
+                ))}
+              </span>
+            ) : (
+              <span className="muted">nothing</span>
+            )}
+          </div>
+        )}
         {e.kind === 'scrap' && (
           <>
-            <Stepper label="Stolen fragments" value={e.stolen ?? 0} min={0} max={5} onChange={(v) => patch({ stolen: v }, `stolen → ${v}`)} />
+            {!state.cards && (
+              <Stepper label="Stolen fragments" value={e.stolen ?? 0} min={0} max={5} onChange={(v) => patch({ stolen: v }, `stolen → ${v}`)} />
+            )}
             <label className="check">
               <input
                 type="checkbox"
@@ -158,9 +179,7 @@ function PlayerEditor({ state, run, placeMode, setPlaceMode, onClose }: EditorPr
   return (
     <>
       <header className="inspector-head">
-        <span className="mini-token big" style={{ background: PLAYER_COLOR }}>
-          YOU
-        </span>
+        <MiniToken big />
         <div>
           <h2>Your wizard</h2>
           <p className="muted">On {coordLabel(p.pos)}</p>
@@ -208,8 +227,12 @@ function TableTools({ state, run, placeMode, setPlaceMode }: Omit<EditorProps, '
   const exit = state.room.exit;
   return (
     <>
-      <h2>Table fixes</h2>
-      <p className="hint">Select a token on the board to edit its HP, statuses or position. Every fix is recorded in the log.</p>
+      <h2>{state.cards ? 'GM tools' : 'Table fixes'}</h2>
+      <p className="hint">
+        {state.cards
+          ? 'Select a token on the board to edit its HP, statuses or position, for testing situations. Every change is recorded in the log.'
+          : 'Select a token on the board to edit its HP, statuses or position. Every fix is recorded in the log.'}
+      </p>
       <div className="place-row">
         <select value={kind} onChange={(e) => setKind(e.target.value as EnemyKind)} aria-label="Unit type">
           {PLACEABLE.map((k) => (

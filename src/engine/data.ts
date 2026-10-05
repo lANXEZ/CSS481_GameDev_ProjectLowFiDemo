@@ -131,7 +131,7 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
     notes: 'Crowned: holds the room key. Hunts for a clear line to you.',
     behavior:
       'Walks the shortest path to a tile where it can see you (straight or diagonal, pillars block), then holds still. On its 2nd, 4th, 6th… turn, once it sees you it marks a line to the board edge and its turn ends. The first action of its next turn fires 5 dmg down that line. An unused charge is lost at the end of that turn.',
-    drop: 'Heal potion (+ unlocks the exit)',
+    drop: 'Max Potion (+ unlocks the exit)',
   },
   ward: {
     kind: 'ward',

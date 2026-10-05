@@ -1,14 +1,28 @@
+import {
+  cardsForSpec,
+  cardsLabel,
+  comboFromCards,
+  drawCards,
+  fragmentName,
+  freshShuffle,
+  newCardState,
+  takeFromHand,
+  type DrawResult,
+} from './cards';
 import { ENEMY_DEFS, ROOMS, RULES, coordLabel, parseCoord } from './data';
 import {
   RuleError,
   burnTickPlayer,
+  checkGrimoire,
   cloneState,
   damageEnemy,
   enemyName,
   immunityReason,
   log,
   playerOnExit,
+  tableLog,
 } from './core';
+import { random } from './rng';
 import { DIR_VECTORS, addPos, enemyAt, inBounds, isPillar, samePos } from './grid';
 import {
   ELEMENT_EFFECT,
@@ -21,12 +35,14 @@ import {
   spellTiles,
   unstableTiles,
 } from './spells';
-import type { Dir, Element, Enemy, EnemyKind, GameState, Pos, SpellSpec } from './types';
+import type { Card, Dir, Element, Enemy, EnemyKind, GameMode, GameState, Pos, SpellSpec } from './types';
 
 const noStatus = () => ({ burn: 0, root: 0, stun: 0 });
 
-export function createGame(seed: number = Date.now()): GameState {
+export function createGame(seed: number = Date.now(), mode: GameMode = 'tracker'): GameState {
   const state: GameState = {
+    mode,
+    ...(mode === 'simulation' ? { cards: newCardState() } : {}),
     roomIndex: 0,
     room: { id: '', name: '', blurb: '', width: 0, height: 0, pillars: [], exit: null },
     player: {
@@ -52,9 +68,15 @@ export function createGame(seed: number = Date.now()): GameState {
     nextLogId: 1,
     pendingLoot: [],
   };
-  log(state, 'system', 'New game. Shuffle the 11 fragment cards into a deck and draw a hand of 5.', true);
+  tableLog(state, 'system', 'New game. Shuffle the 11 fragment cards into a deck and draw a hand of 5.', 'New game: the 11 fragment cards are your deck.');
   loadRoom(state, 0);
   return state;
+}
+
+/** "You draw Fire and Beam." plus a note when the discard pile was reshuffled into the deck. */
+export function logDraw(state: GameState, result: DrawResult, lead: string): void {
+  if (result.reshuffled) log(state, 'system', 'Your deck ran out: the discard pile is shuffled into a new deck.');
+  log(state, 'player', result.drawn.length ? `${lead} ${cardsLabel(result.drawn)}.` : `${lead} nothing: no cards left to draw.`);
 }
 
 /** Set up a room in place. HP and potions carry over; mana resets. */
@@ -85,8 +107,12 @@ export function loadRoom(state: GameState, index: number): void {
   for (const spawn of def.enemies) spawnEnemy(state, spawn.kind, parseCoord(spawn.at), spawn.element);
 
   log(state, 'system', `Room ${index + 1}: ${def.name}. Mana resets to ${RULES.roomStartMana}.`);
-  log(state, 'system', `Set up the board for ${def.name}: YOU on ${def.start}, ${state.enemies.map((e) => `${e.id}@${coordLabel(e.pos)}`).join(', ')}.`, true);
+  tableLog(state, 'system', `Set up the board for ${def.name}: YOU on ${def.start}, ${state.enemies.map((e) => `${e.id}@${coordLabel(e.pos)}`).join(', ')}.`);
   log(state, 'player', 'Your turn 1.');
+  if (state.cards) {
+    // Every room starts from a freshly shuffled deck (hand and discard pile included).
+    logDraw(state, freshShuffle(state), 'Hand, deck and discard pile are shuffled together. You draw');
+  }
 }
 
 export function spawnEnemy(state: GameState, kind: EnemyKind, pos: Pos, element?: Element): Enemy {
@@ -113,7 +139,10 @@ export function spawnEnemy(state: GameState, kind: EnemyKind, pos: Pos, element?
     enemy.marks = 0;
     enemy.mode = 'guarded';
   }
-  if (kind === 'scrap') enemy.stolen = 0;
+  if (kind === 'scrap') {
+    enemy.stolen = 0;
+    if (state.cards) enemy.carried = [];
+  }
   state.enemies.push(enemy);
   return enemy;
 }
@@ -162,9 +191,29 @@ export function playerMove(state: GameState, dir: Dir): GameState {
   });
 }
 
-export function castError(state: GameState, spec: SpellSpec, dir: Dir | null): string | null {
+/**
+ * Simulation mode: the hand cards a cast uses. With `cardIds` they must be in hand and make exactly this spell;
+ * without, matching cards are taken from the hand. Returns an error message instead when that's impossible.
+ */
+function castCards(state: GameState, spec: SpellSpec, cardIds?: number[]): Card[] | string {
+  const hand = state.cards!.hand;
+  if (!cardIds) return cardsForSpec(hand, spec) ?? `Your hand can't make ${spellName(spec)}.`;
+  const picked = hand.filter((c) => cardIds.includes(c.id));
+  if (picked.length !== cardIds.length) return 'Those fragments are not in your hand.';
+  const combo = comboFromCards(picked);
+  if (combo.kind !== 'spell') return combo.kind === 'invalid' ? combo.reason : 'Those fragments make Unstable Fire.';
+  const same = (a: SpellSpec, b: SpellSpec) =>
+    a.element === b.element && a.elementCount === b.elementCount && a.shape === b.shape && a.shapeCount === b.shapeCount;
+  return same(combo.spec, spec) ? picked : 'Those fragments make a different spell.';
+}
+
+export function castError(state: GameState, spec: SpellSpec, dir: Dir | null, cardIds?: number[]): string | null {
   const invalid = spellError(spec);
   if (invalid) return invalid;
+  if (state.cards) {
+    const cards = castCards(state, spec, cardIds);
+    if (typeof cards === 'string') return cards;
+  }
   if (state.player.mana < spellCost(spec)) return `Needs ${spellCost(spec)} mana (you have ${state.player.mana}).`;
   if (spec.shape === 'beam' && !dir) return 'Pick a direction for the Beam.';
   return null;
@@ -178,16 +227,22 @@ function applyStatus(s: GameState, e: Enemy, element: Element): void {
   log(s, 'player', `${enemyName(e)} is ${effect === 'burn' ? 'burning' : effect === 'root' ? 'rooted' : 'stunned'}.`);
 }
 
-export function playerCast(state: GameState, spec: SpellSpec, dir: Dir | null): GameState {
+/** `cardIds` (Simulation mode) picks the exact hand cards to spend; otherwise matching cards are used. */
+export function playerCast(state: GameState, spec: SpellSpec, dir: Dir | null, cardIds?: number[]): GameState {
   assertPlayerAction(state);
-  const err = castError(state, spec, dir);
+  const err = castError(state, spec, dir, cardIds);
   if (err) throw new RuleError(err);
   return playerAction(state, (s) => {
     const cost = spellCost(spec);
     s.player.mana -= cost;
     const tiles = spellTiles(s, spec, dir);
     log(s, 'player', `Cast ${spellName(spec)}${dir ? ` ${dir}` : ''} for ${cost} mana (mana ${s.player.mana + cost} → ${s.player.mana}).`);
-    log(s, 'player', `Discard the ${fragmentCount(spec)} fragments you used.`, true);
+    if (s.cards) {
+      const used = castCards(s, spec, cardIds) as Card[];
+      s.cards.discard.push(...takeFromHand(s.cards, used.map((c) => c.id)));
+    } else {
+      log(s, 'player', `Discard the ${fragmentCount(spec)} fragments you used.`, true);
+    }
     const targets = enemiesOnTiles(s, tiles);
     if (targets.length === 0) log(s, 'player', 'The spell hits nothing.');
     const dmg = spellDamage(spec);
@@ -205,6 +260,7 @@ export function playerCast(state: GameState, spec: SpellSpec, dir: Dir | null): 
 
 export function unstableError(state: GameState): string | null {
   if (state.player.unstableUsed) return 'Unstable Fire was already used in this room.';
+  if (state.cards && state.cards.hand.filter((c) => c.kind === 'fire').length < 3) return 'Needs three Fire fragments in your hand.';
   if (state.player.mana < RULES.unstableCost) return `Needs ${RULES.unstableCost} mana (you have ${state.player.mana}).`;
   return null;
 }
@@ -218,7 +274,12 @@ export function playerUnstableFire(state: GameState, damage: number): GameState 
     s.player.mana -= RULES.unstableCost;
     s.player.unstableUsed = true;
     log(s, 'player', `Cast UNSTABLE FIRE (Fire ×3) for ${RULES.unstableCost} mana: the wheel lands on ${damage} damage.`);
-    log(s, 'player', 'Discard the 3 Fire fragments you used.', true);
+    if (s.cards) {
+      const fires = s.cards.hand.filter((c) => c.kind === 'fire').slice(0, 3);
+      s.cards.discard.push(...takeFromHand(s.cards, fires.map((c) => c.id)));
+    } else {
+      log(s, 'player', 'Discard the 3 Fire fragments you used.', true);
+    }
     for (const e of enemiesOnTiles(s, unstableTiles(s))) {
       const immune = immunityReason(s, e, 'fire');
       if (immune) {
@@ -246,17 +307,37 @@ export function playerDrinkPotion(state: GameState): GameState {
   if (state.player.potions <= 0) throw new RuleError('You have no potion.');
   return playerAction(state, (s) => {
     const before = s.player.hp;
-    s.player.hp = s.player.maxHp; // the Heal Potion restores full HP
+    s.player.hp = s.player.maxHp; // the Max Potion restores full HP
     s.player.potions -= 1;
-    log(s, 'player', `Drink the Heal Potion: HP ${before} → ${s.player.hp}.`);
-    log(s, 'player', 'Discard the Heal Potion card.', true);
+    log(s, 'player', `Drink the Max Potion: HP ${before} → ${s.player.hp}.`);
+    tableLog(s, 'player', 'Discard the Max Potion card.');
   });
 }
 
-export function playerReroll(state: GameState): GameState {
+export function rerollError(state: GameState, cardIds: number[] = []): string | null {
+  if (!state.cards) return null;
+  if (cardIds.length === 0) return 'Pick the cards in your hand you want to swap.';
+  if (!cardIds.every((id) => state.cards!.hand.some((c) => c.id === id))) return 'Those fragments are not in your hand.';
+  return null;
+}
+
+/**
+ * Reroll: discard the chosen cards from your hand, then draw that many from the deck.
+ * Simulation mode needs `cardIds`; the tracker leaves the choice to the table.
+ */
+export function playerReroll(state: GameState, cardIds: number[] = []): GameState {
   assertPlayerAction(state);
+  const err = rerollError(state, cardIds);
+  if (err) throw new RuleError(err);
   return playerAction(state, (s) => {
-    log(s, 'player', `Reroll: discard your whole hand and draw ${RULES.handSize} fresh cards.`, true);
+    if (!s.cards) {
+      log(s, 'player', 'Reroll: discard any of the fragments in your hand and draw that many from the deck.', true);
+      return;
+    }
+    const swapped = takeFromHand(s.cards, cardIds);
+    s.cards.discard.push(...swapped);
+    log(s, 'player', `Reroll: discard ${cardsLabel(swapped)}.`);
+    logDraw(s, drawCards(s, swapped.length), 'You draw');
   });
 }
 
@@ -271,10 +352,12 @@ function endTurnInPlace(s: GameState): void {
   if (s.actionsLeft > 0) log(s, 'player', `End turn (${s.actionsLeft} action${s.actionsLeft === 1 ? '' : 's'} unused).`);
   if (s.erasureZone.length > 0) {
     if (s.erasureZone.some((p) => samePos(p, s.player.pos))) {
-      log(s, 'system', 'YOU ended your turn inside the Erasure zone: permanently remove one fragment from your hand (out of the game).', true);
+      if (s.cards) eraseFragment(s);
+      else log(s, 'system', 'YOU ended your turn inside the Erasure zone: permanently remove one fragment from your hand (out of the game).', true);
     }
     s.erasureZone = [];
     log(s, 'system', 'The Erasure zone fades.');
+    if (s.phase === 'lost') return;
   }
   const st = s.player.status;
   if (!s.playerActed && st.burn > 0) {
@@ -287,6 +370,20 @@ function endTurnInPlace(s: GameState): void {
   log(s, 'enemy', `Enemy turn ${s.turn}.`);
 }
 
+/** Simulation mode: the Erasure zone takes a random hand card out of the game (the top of the deck if the hand is empty). */
+function eraseFragment(s: GameState): void {
+  const cards = s.cards!;
+  const fromHand = cards.hand.length > 0;
+  const card = fromHand ? cards.hand.splice(Math.floor(random(s) * cards.hand.length), 1)[0] : cards.deck.pop();
+  if (!card) {
+    log(s, 'system', 'YOU ended your turn inside the Erasure zone, but there was no fragment left to erase.');
+    return;
+  }
+  cards.erased.push(card);
+  log(s, 'system', `YOU ended your turn inside the Erasure zone: your ${fragmentName(card.kind)} fragment is erased from ${fromHand ? 'your hand' : 'the top of your deck'} for good.`);
+  checkGrimoire(s);
+}
+
 /** After stepping on the exit: move on to the next room, forfeiting drops of enemies still alive. */
 export function advanceRoom(state: GameState): GameState {
   if (state.phase !== 'roomExit') throw new RuleError('The player is not on the exit.');
@@ -295,6 +392,8 @@ export function advanceRoom(state: GameState): GameState {
   if (skipped.length) {
     log(s, 'system', `Left behind: ${skipped.map(enemyName).join(', ')}. Their fragments are forfeited.`);
   }
+  const carried = s.enemies.flatMap((e) => e.carried ?? []);
+  if (carried.length) log(s, 'system', `${cardsLabel(carried)} stay${carried.length === 1 ? 's' : ''} behind with the Page Scraps.`);
   if (s.roomIndex + 1 >= ROOMS.length) {
     s.phase = 'won';
     log(s, 'system', 'You escaped the final room!');

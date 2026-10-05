@@ -293,7 +293,7 @@ describe('warden', () => {
     expect(at(s, '5a')).toBe('e4');
   });
 
-  it('the heal potion restores full HP (after any burn tick)', () => {
+  it('the Max Potion restores full HP (after any burn tick)', () => {
     let s = board({ player: 'a1' });
     s.player.potions = 1;
     s.player.hp = 3;
@@ -493,7 +493,7 @@ describe('loot popup', () => {
     let s = board({ player: 'a1', enemies: [{ kind: 'warden', at: 'c3' }, { kind: 'ward', at: 'e5', element: 'rock' }], exit: { at: 'f6', locked: true } });
     s = gmRemoveEnemy(s, '5a', true);
     expect(s.pendingLoot).toHaveLength(1);
-    expect(s.pendingLoot[0].extras.join(' ')).toMatch(/Heal Potion.*unlocked/);
+    expect(s.pendingLoot[0].extras.join(' ')).toMatch(/Max Potion.*unlocked/);
     s = gmRemoveEnemy(acknowledgeLoot(s), '6a', true);
     expect(s.pendingLoot).toEqual([]);
   });

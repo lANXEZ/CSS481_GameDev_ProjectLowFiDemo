@@ -4,7 +4,8 @@ import { SIDE_LABEL } from './look';
 
 export function LogPanel({ state }: { state: GameState }) {
   const [tableOnly, setTableOnly] = useState(false);
-  const entries = state.log.filter((l) => !tableOnly || l.paper);
+  const sim = state.mode === 'simulation';
+  const entries = state.log.filter((l) => sim || !tableOnly || l.paper);
 
   // Newest turn first; entries inside a turn stay in reading order.
   const groups: { key: string; title: string; items: LogEntry[] }[] = [];
@@ -26,7 +27,7 @@ export function LogPanel({ state }: { state: GameState }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `broken-grimoire-playtest-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.json`;
+    a.download = `broken-grimoire-${sim ? 'simulation' : 'playtest'}-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -35,10 +36,12 @@ export function LogPanel({ state }: { state: GameState }) {
     <section className="panel log" aria-label="Game log">
       <div className="log-head">
         <h2>Log</h2>
-        <label className="check">
-          <input type="checkbox" checked={tableOnly} onChange={(e) => setTableOnly(e.target.checked)} />
-          Table actions only
-        </label>
+        {!sim && (
+          <label className="check">
+            <input type="checkbox" checked={tableOnly} onChange={(e) => setTableOnly(e.target.checked)} />
+            Table actions only
+          </label>
+        )}
         <button className="btn btn-small" onClick={exportLog}>
           Export playtest log
         </button>
@@ -50,7 +53,7 @@ export function LogPanel({ state }: { state: GameState }) {
             <ul>
               {g.items.map((l) => (
                 <li key={l.id} className={`log-line side-${l.side}${l.paper ? ' is-paper' : ''}`}>
-                  <span className="log-side">{l.paper ? 'Table' : SIDE_LABEL[l.side]}</span>
+                  <span className="log-side">{l.paper ? 'Table' : sim && l.side === 'system' ? 'Game' : SIDE_LABEL[l.side]}</span>
                   <span>{l.text}</span>
                 </li>
               ))}
