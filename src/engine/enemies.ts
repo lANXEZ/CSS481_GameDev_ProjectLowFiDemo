@@ -5,8 +5,10 @@ import {
   burnTickEnemy,
   checkGrimoire,
   cloneState,
+  damageEnemy,
   damagePlayer,
   enemyName,
+  immunityReason,
   log,
   tableLog,
   wardsStanding,
@@ -16,6 +18,7 @@ import {
   DIRS8,
   addPos,
   chebyshev,
+  enemyAt,
   hasLineOfSight,
   isPillar,
   isWalkable,
@@ -25,6 +28,7 @@ import {
   neighbors8,
   posKey,
   ray,
+  samePos,
   stepAway,
   stepToward,
 } from './grid';
@@ -317,6 +321,20 @@ export function archerCanShoot(s: GameState, e: Enemy): boolean {
   return !!lineDirection(e.pos, p) && chebyshev(e.pos, p) <= RULES.archerRange && hasLineOfSight(s, e.pos, p);
 }
 
+/**
+ * Friendly fire: the first other monster standing between the Archer and you on the line of the shot.
+ * The arrow hits it and stops there instead of reaching you.
+ */
+export function arrowBlocker(s: GameState, e: Enemy): Enemy | null {
+  const d = lineDirection(e.pos, s.player.pos);
+  if (!d) return null;
+  for (let p = addPos(e.pos, d); !samePos(p, s.player.pos); p = addPos(p, d)) {
+    const hit = enemyAt(s, p);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 function decideArcher(s: GameState, e: Enemy, ctx: TurnCtx): Decision {
   if (ctx.backoffDir) {
     if (e.status.root > 0) return stop('is rooted and can’t back off.');
@@ -328,10 +346,24 @@ function decideArcher(s: GameState, e: Enemy, ctx: TurnCtx): Decision {
   if (ctx.attacked) return stop();
   if (archerCanShoot(s, e)) {
     if (e.status.stun > 0) return stop('is stunned and can’t shoot.');
-    const p = s.player.pos;
-    return act({ kind: 'shoot', value: ENEMY_DEFS.archer.damage }, [p], () => {
+    const dmg = ENEMY_DEFS.archer.damage;
+    // It shoots whenever it has a line to you; a monster in the way takes the arrow instead.
+    const blocker = arrowBlocker(s, e);
+    if (blocker) {
+      return act({ kind: 'shoot', value: dmg, note: `${enemyName(blocker)} is in the way` }, [blocker.pos], () => {
+        ctx.attacked = true;
+        const immune = immunityReason(s, blocker, null);
+        if (immune) {
+          log(s, 'enemy', `${enemyName(e)} shoots at YOU, but ${enemyName(blocker)} is in the way and takes no damage (${immune}). The arrow stops there.`);
+        } else {
+          log(s, 'enemy', `${enemyName(e)} shoots at YOU, but ${enemyName(blocker)} is in the way: friendly fire!`);
+          damageEnemy(s, blocker, dmg, `${enemyName(e)}'s arrow`, 'enemy');
+        }
+      });
+    }
+    return act({ kind: 'shoot', value: dmg }, [s.player.pos], () => {
       ctx.attacked = true;
-      damagePlayer(s, ENEMY_DEFS.archer.damage, `${enemyName(e)} (arrow)`);
+      damagePlayer(s, dmg, `${enemyName(e)} (arrow)`);
     });
   }
   return approach(s, e, archerFiringTiles(s));

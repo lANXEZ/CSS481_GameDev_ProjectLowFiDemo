@@ -84,10 +84,10 @@ export const ENEMY_DEFS: Record<EnemyKind, EnemyDef> = {
     actions: 2,
     attack: 'ranged',
     damage: 2,
-    attackText: '2 dmg, range 4, straight or diagonal line. Blocked by pillars.',
-    notes: 'If you are adjacent when its turn starts, it spends both actions backing off away from you.',
+    attackText: '2 dmg, range 4, straight or diagonal line. Blocked by pillars; the first monster in the way takes the arrow instead.',
+    notes: 'If you are adjacent when its turn starts, it spends both actions backing off away from you. Friendly fire: monsters in the line of fire take the arrow.',
     behavior:
-      'Walks until it has a clear straight or diagonal shot within 4 tiles, then shoots once. If you start its turn next to it, it spends both actions backing away from you instead.',
+      'Walks until it has a straight or diagonal shot within 4 tiles (pillars block, monsters don’t), then shoots once. A monster standing between it and you takes the 2 dmg instead and the arrow stops there. If you start its turn next to it, it spends both actions backing away from you instead.',
     drop: 'Beam fragment',
   },
   brute: {

@@ -59,9 +59,12 @@ export function wardsStanding(state: GameState): boolean {
   return state.enemies.some((e) => e.kind === 'ward');
 }
 
-/** Why a spell of this element has no effect on this enemy, or null if it can be hurt. */
+/**
+ * Why an attack has no effect on this enemy, or null if it can be hurt. `element` is the spell's element,
+ * or null for anything that isn't a spell (an Archer's arrow), which never hurts a Page Ward.
+ */
 export function immunityReason(state: GameState, e: Enemy, element: string | null): string | null {
-  if (e.kind === 'ward' && element !== e.element) return `only ${e.element} hurts it`;
+  if (e.kind === 'ward' && element !== e.element) return `only ${e.element} spells hurt it`;
   if (e.kind === 'redactor' && wardsStanding(state)) return 'protected while a Page Ward stands';
   return null;
 }

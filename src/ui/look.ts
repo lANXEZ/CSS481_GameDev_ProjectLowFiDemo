@@ -61,6 +61,14 @@ export const INTENT_INFO: Record<IntentKind, IntentInfo> = {
   wait: { color: '#a3a9b8', describe: () => 'Does nothing' },
 };
 
+/** A shot that will hit another monster in the way (friendly fire) instead of you. */
+export const FRIENDLY_FIRE_COLOR = '#f0b54a';
+
+export const isFriendlyFire = (g: { kind: IntentKind; note?: string }) => g.kind === 'shoot' && !!g.note;
+
+/** Chip colour: the kind's colour, except friendly fire, which isn't aimed at you. */
+export const intentColor = (g: { kind: IntentKind; note?: string }) => (isFriendlyFire(g) ? FRIENDLY_FIRE_COLOR : INTENT_INFO[g.kind].color);
+
 export interface IntentGroup {
   kind: IntentKind;
   value?: number;
@@ -73,7 +81,7 @@ export function groupIntents(intents: Intent[] = []): IntentGroup[] {
   const out: IntentGroup[] = [];
   for (const i of intents) {
     const last = out[out.length - 1];
-    if (last && last.kind === i.kind && last.value === i.value) last.count++;
+    if (last && last.kind === i.kind && last.value === i.value && last.note === i.note) last.count++;
     else out.push({ kind: i.kind, value: i.value, count: 1, note: i.note });
   }
   return out;
@@ -85,6 +93,7 @@ export function describeIntents(intents: Intent[] = []): string {
   if (groups.length === 0) return 'Nothing this turn.';
   const parts = groups.map((g) => {
     const text = INTENT_INFO[g.kind].describe(g.count, g.value);
+    if (isFriendlyFire(g)) return `Shoots at you, but ${g.note}: it takes the ${g.value} dmg arrow instead`;
     return g.kind === 'wait' && g.note ? `Waits (it ${g.note.replace(/[.,].*$/, '')})` : text;
   });
   const sentence = parts.map((p, i) => (i === 0 ? p : p.charAt(0).toLowerCase() + p.slice(1))).join(', then ');

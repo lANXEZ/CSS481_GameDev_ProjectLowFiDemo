@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FocusEvent, type KeyboardEvent, type MouseEvent } from 'react';
 import { RULES, coordLabel, posKey, wardsStanding, type Enemy, type GameState, type Intent, type IntentKind, type Pos } from '../engine';
 import { MAP_ART, MAP_FRAME, OPEN_EXIT_ART, PLAYER_TOKEN_ART, STATUS_ART, tokenArt } from './art';
-import { INTENT_INFO, groupIntents, hpColor, unitTitle, type IntentGroup } from './look';
+import { INTENT_INFO, groupIntents, hpColor, intentColor, unitTitle, type IntentGroup } from './look';
 import { UnitTooltip } from './UnitTooltip';
 
 const T = 80; // tile size in SVG units
@@ -419,12 +419,11 @@ function IntentRow({ cx, y, intents }: { cx: number; y: number; intents?: Intent
       {chips.map(({ g, label, w }, i) => {
         const x0 = left;
         left += w + gap;
-        const info = INTENT_INFO[g.kind];
         return (
           <g key={i} transform={`translate(${x0}, 0)`}>
             <rect x={0} y={-7.5} width={w} height={15} rx={4} className="intent-chip" />
             <g transform="translate(7.5, 0) scale(0.92)">
-              <IntentGlyph kind={g.kind} color={info.color} />
+              <IntentGlyph kind={g.kind} color={intentColor(g)} />
             </g>
             {label && (
               <text x={15} y={3.4} className="intent-text">

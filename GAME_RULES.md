@@ -109,7 +109,7 @@ A cast is exactly **one element + one shape**, 2–3 fragments in total, and eit
 | # | Unit | HP | Actions | Attack | Drops |
 |---|---|---|---|---|---|
 | 1 | Rat | 2 | 3 | 1 dmg, adjacent | Fire fragment |
-| 2 | Archer | 3 | 2 | 2 dmg, range 4, straight or diagonal | Beam fragment |
+| 2 | Archer | 3 | 2 | 2 dmg, range 4, straight or diagonal; friendly fire | Beam fragment |
 | 3 | Brute | 6 | 2 | 3 dmg, adjacent | Rock fragment |
 | 4 | Leech | 4 | 2 | Drains 1 mana, adjacent | Water fragment |
 | 5 | Warden | 8 | 2 | Telegraphed 5 dmg line | Max Potion + unlocks the exit |
@@ -126,8 +126,15 @@ of dealing damage.
 ### Archer
 - **If you're adjacent when its turn starts:** it spends both actions backing off. Each step goes directly away from
   you; if that tile is blocked, it takes whichever open step puts it farthest from you.
-- **Otherwise:** it walks the shortest path to a tile with a clear shot, then shoots once for 2. A clear shot means
-  within 4 tiles, straight or diagonal, with no pillar in between. Units don't block shots.
+- **Otherwise:** it walks the shortest path to a tile with a shot, then shoots once for 2. A shot means within 4
+  tiles, straight or diagonal, with no pillar in between. Monsters don't stop it from shooting.
+- **Friendly fire:** if another monster stands between the Archer and you on the line of the shot, the arrow hits
+  **the first one** for 2 and stops there; you take nothing. The Archer doesn't avoid this: it shoots whenever it has
+  a line to you.
+  - The monster hit takes the damage like any other (no status). If it dies, it drops its loot as usual *(default)*.
+  - Arrows aren't spells, so a Page Ward in the way (or the Redactor while Wards stand) stops the arrow but takes no
+    damage.
+  - The Warden's halberd wave is unchanged: it still passes through monsters.
 
 ### Warden
 It has no normal attack. Each action, it checks these in order:
@@ -260,7 +267,8 @@ Repeated actions are merged into one chip, and damage values are written on the 
 | Blue double arrow » | Moves (`×3` = three steps) |
 | Grey-blue reverse arrow « | Backs away from you |
 | Red sword | Melee attack, with damage |
-| Red arrow | Archer shot, with damage |
+| Red arrow | Archer shot at you, with damage |
+| Amber arrow | Archer shot that a monster in the way will take instead (friendly fire) |
 | Blue drop | Drains mana |
 | Orange crosshair | Warden marks a line |
 | Orange bolt | Warden fires the marked line, with damage |

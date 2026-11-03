@@ -226,6 +226,42 @@ describe('enemy turn', () => {
     expect(at(after, '2a')).not.toBe('d4');
   });
 
+  it('friendly fire: the arrow hits the first monster in the way and stops there', () => {
+    // Archer a5, Brute a3, you a1: the Brute stands in the line of fire.
+    const s = board({ player: 'a1', enemies: [{ kind: 'archer', at: 'a5' }, { kind: 'brute', at: 'a3' }] });
+    s.enemies.find((e) => e.kind === 'brute')!.status.root = 1; // keep the Brute in the way
+    const plan = planEnemyTurn(toEnemyTurn(s));
+    expect(plan.final.player.hp).toBe(20);
+    expect(hp(plan.final, '3a')).toBe(4);
+    expect(plan.intents['2a']).toEqual([{ kind: 'shoot', value: 2, note: 'Brute 3a is in the way' }]);
+  });
+
+  it('friendly fire hits only the nearest monster in the line', () => {
+    const s = board({ player: 'a1', enemies: [{ kind: 'archer', at: 'd4' }, { kind: 'rat', at: 'b2' }, { kind: 'rat', at: 'c3' }] });
+    s.enemies.filter((e) => e.kind === 'rat').forEach((r) => (r.status.root = 1));
+    const after = runEnemyTurn(s);
+    expect(after.enemies.some((e) => e.id === '1b')).toBe(false); // 1b (c3) is nearest: takes the 2 dmg arrow and dies
+    expect(hp(after, '1a')).toBe(2); // 1a (b2) is behind it, untouched
+    expect(after.player.hp).toBe(20);
+  });
+
+  it('a monster killed by friendly fire drops its loot as usual', () => {
+    const s = board({ player: 'a1', enemies: [{ kind: 'archer', at: 'a5' }, { kind: 'leech', at: 'a3' }] });
+    const leech = s.enemies.find((e) => e.kind === 'leech')!;
+    leech.hp = 2;
+    leech.status.root = 1;
+    const after = runEnemyTurn(s);
+    expect(after.enemies.some((e) => e.kind === 'leech')).toBe(false);
+    expect(after.pendingLoot.map((l) => l.discard)).toEqual([['Water fragment']]);
+  });
+
+  it('an immune unit in the way (a Page Ward) stops the arrow but takes nothing', () => {
+    const s = board({ size: 8, player: 'a1', enemies: [{ kind: 'archer', at: 'a5' }, { kind: 'ward', at: 'a3', element: 'fire' }] });
+    const after = runEnemyTurn(s);
+    expect(after.player.hp).toBe(20);
+    expect(hp(after, '6a')).toBe(4);
+  });
+
   it('leech drains mana, not HP', () => {
     const s = board({ player: 'a1', enemies: [{ kind: 'leech', at: 'a2' }] });
     const after = runEnemyTurn(s);
